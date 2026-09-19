@@ -1,0 +1,25 @@
+{
+ "format_version": "1.0",
+ "terraform_version": "1.8.5",
+ "resource_changes": [
+  {
+   "address": "module.platform.aws_autoscaling_group.worker",
+   "type": "aws_autoscaling_group",
+   "change": {
+    "actions": ["update"],
+    "before": {
+     "name": "worker-asg",
+     "tags": {
+      "convergenci_rotation": "v1"
+     }
+    },
+    "after": {
+     "name": "worker-asg",
+     "tags": {
+      "convergenci_rotation": "v2"
+     }
+    }
+   }
+  }
+ ]
+}

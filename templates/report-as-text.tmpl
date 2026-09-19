@@ -1,0 +1,41 @@
+{{- /*
+   Canned text template for pretty-printing a convergence report.
+   This file is intended to be used by the doctor command or via gomplate.
+*/ -}}
+{{- $r := ds "report" -}}
+{{- $status := "unknown" -}}
+{{- if index $r "status" -}}{{- $status = index $r "status" -}}{{- else if $r.resources -}}{{- $status = "pending" -}}{{- end -}}
+{{- $message := "no message" -}}
+{{- $pending := 0 -}}
+{{- $converged := 0 -}}
+{{- range $r.resources -}}
+  {{- $resourceStatus := index . "status" | default "pending" -}}
+  {{- if eq $resourceStatus "converged" -}}{{- $converged = add $converged 1 -}}{{- else -}}{{- $pending = add $pending 1 -}}{{- end -}}
+{{- end -}}
+{{- if $r.resources -}}
+  {{- if gt $pending 0 -}}{{- $status = "pending" -}}{{- $message = printf "%d resource(s) remain pending" $pending -}}{{- else -}}{{- $status = "successful" -}}{{- $message = "all resources converged" -}}{{- end -}}
+{{- end -}}
+Status: {{ $status }}
+Message: {{ $message }}
+Contract: {{ index $r "contract_path" | default "n/a" }}
+Expected resources: {{ len $r.resources }}
+Pending resources: {{ $pending }}
+Converged resources: {{ $converged }}
+Started at: {{ index $r "started_at" | default "n/a" }}
+Finished at: {{ index $r "finished_at" | default "n/a" }}
+{{ if $r.resources }}
+---
+Resources:
+{{- range $r.resources }}
+{{- $obs := index . "observation" | default dict }}
+  * {{ index . "address" | default "<unknown>" }}
+    status: {{ index . "status" | default "pending" }}
+    strategy: {{ index $obs "strategy" | default "n/a" }}
+    desired: {{ if index . "desired_generation" }}{{ range $key, $value := index . "desired_generation" }}{{ $key }}={{ $value }} {{ end }}{{ else }}n/a{{ end }}
+{{- end }}
+---
+{{- else }}
+---
+Resources: none
+
+{{- end }}

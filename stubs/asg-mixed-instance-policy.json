@@ -1,0 +1,29 @@
+{
+ "format_version": "1.0",
+ "terraform_version": "1.8.5",
+ "resource_changes": [
+  {
+   "address": "module.workers.aws_autoscaling_group.mixed",
+   "type": "aws_autoscaling_group",
+   "change": {
+    "actions": ["update"],
+    "before": {
+     "name": "mixed-asg",
+     "mixed_instances_policy": {
+      "launch_template": {
+       "version": "3"
+      }
+     }
+    },
+    "after": {
+     "name": "mixed-asg",
+     "mixed_instances_policy": {
+      "launch_template": {
+       "version": "4"
+      }
+     }
+    }
+   }
+  }
+ ]
+}

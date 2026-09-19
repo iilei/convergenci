@@ -1,0 +1,58 @@
+[tools]
+gomplate = "latest"
+
+[tasks.fmt]
+description = "Format Go sources"
+run = "gofmt -w ."
+
+[tasks.vet]
+description = "Run Go vet"
+run = "go vet ./..."
+
+[tasks.test]
+depends = ["build-fake-aws"]
+description = "Run Go tests"
+run = "go test ./..."
+
+[tasks.check]
+depends = ["build-fake-aws"]
+description = "Format, vet, and test the Go project"
+run = "gofmt -w . && go vet ./... && go test ./..."
+
+[tasks.build]
+description = "Build the convergenci binary"
+run = "go build -o ./convergenci ./cmd/convergenci"
+
+[tasks.build-fake-aws]
+description = "Build the fake AWS CLI binary for local bench testing"
+run = "mkdir -p ./testdata/fake-aws-bin && go build -o ./testdata/fake-aws-bin/aws ./testdata/fake-aws"
+
+# export CONVERGENCI_DEBUG_FORMAT='[{{ .Level }} {{ .Timestamp }}] status={{ .Status }} pct={{ .PercentageComplete }}'; export DEBUG=true;
+[tasks.fake-aws-scenarios-scan]
+depends = ["build", "build-fake-aws"]
+description = "Exercise all built-in fake AWS scenarios against the await flow"
+run = """
+for scenario in asg-custom-tag-rotation asg-nested-module-complex-name ; do
+    out_dir=\".bench/$scenario\"; rm -rf "$out_dir"; mkdir -p \"$out_dir\";
+    ./convergenci scan stubs/$scenario.json  \
+    --output-json "${out_dir}/.convergence.json" \
+    --aws-cli-path "$PWD/testdata/fake-aws-bin/aws"
+done
+"""
+
+[tasks.fake-aws-scenarios-await]
+depends = ["fake-aws-scenarios-scan"]
+description = "Exercise all built-in fake AWS scenarios against the await flow"
+run = """
+for scenario in asg-custom-tag-rotation asg-nested-module-complex-name ; do
+    out_dir=\".bench/$scenario\";
+    CONVERGENCI_AWAIT_TIMEOUT=250ms CONVERGENCI_AWAIT_INTERVAL=50ms FAKE_AWS_SCENARIO=in-progress-then-success \
+    ./convergenci await "${out_dir}/.convergence.json" \
+    --aws-cli-path "$PWD/testdata/fake-aws-bin/aws"
+done
+"""
+
+[tasks.render-report]
+description = "Render the generated complex fake AWS report with gomplate"
+depends = [ "fake-aws-scenarios-await"]
+run = "gomplate -d report=file://$PWD/.bench/complex-report/.convergence.convergence-report.json -f templates/report-as-text.tmpl"

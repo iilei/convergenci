@@ -1,0 +1,10 @@
+# Enable MD060 globally or via per-file-ignores/extend-enable
+[global]
+extend-enable = ["MD060"]
+
+# Configure MD060 options
+[MD060]
+enabled = true
+style = "aligned"           # Options: "aligned", "compact", "tight", "any"
+max-width = 0               # Auto-compact if exceeding line length (inherits from MD013)
+column-align = "auto"       # Options: "auto", "left", "center", "right"

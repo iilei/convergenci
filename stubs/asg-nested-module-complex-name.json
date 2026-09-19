@@ -1,0 +1,81 @@
+{
+ "format_version": "1.0",
+ "terraform_version": "1.8.5",
+ "resource_changes": [
+  {
+   "address": "module.shared.module.platform.module.asg.aws_autoscaling_group.worker_group[0]",
+   "type": "aws_autoscaling_group",
+   "change": {
+    "actions": ["update"],
+    "before": {
+     "name": "shared-platform-worker-group-0",
+     "tags": {
+      "convergenci_rotation": "blue"
+     },
+     "launch_template": {
+      "version": "3"
+     }
+    },
+    "after": {
+     "name": "shared-platform-worker-group-0",
+     "tags": {
+      "convergenci_rotation": "green"
+     },
+     "launch_template": {
+      "version": "4"
+     }
+    }
+   }
+  },
+  {
+   "address": "module.shared.module.platform.module.asg.aws_autoscaling_group.worker_group[1]",
+   "type": "aws_autoscaling_group",
+   "change": {
+    "actions": ["update"],
+    "before": {
+     "name": "shared-platform-worker-group-1",
+     "tags": {
+      "convergenci_rotation": "blue"
+     },
+     "launch_template": {
+      "version": "3"
+     }
+    },
+    "after": {
+     "name": "shared-platform-worker-group-1",
+     "tags": {
+      "convergenci_rotation": "green"
+     },
+     "launch_template": {
+      "version": "4"
+     }
+    }
+   }
+  },
+  {
+   "address": "module.shared.module.platform.module.asg.aws_autoscaling_group.worker_group[2]",
+   "type": "aws_autoscaling_group",
+   "change": {
+    "actions": ["update"],
+    "before": {
+     "name": "shared-platform-worker-group-2",
+     "tags": {
+      "convergenci_rotation": "blue"
+     },
+     "launch_template": {
+      "version": "3"
+     }
+    },
+    "after": {
+     "name": "shared-platform-worker-group-2",
+     "tags": {
+      "convergenci_rotation": "green"
+     },
+     "launch_template": {
+      "version": "4"
+     }
+    }
+   }
+  }
+ ]
+}

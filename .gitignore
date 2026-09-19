@@ -1,0 +1,14 @@
+bin
+dist
+coverage
+convergenci
+.convergenci.json
+.convergence.json
+.convergenci.jsonlines
+.convergence.jsonlines
+.convergence-report.json
+.convergence-report.jsonlines
+.bench/
+testdata/fake-aws-bin
+/fake-aws
+!testdata/fake-aws/*
