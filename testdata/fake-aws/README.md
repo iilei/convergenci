@@ -42,4 +42,6 @@ export FAKE_AWS_SCENARIO=late-success
 ./convergenci await .convergence.json --timeout 2s --interval 100ms --aws-cli-path "$(pwd)/testdata/fake-aws-bin/aws"
 ```
 
-The response fields mimic AWS roughly: `Status` reflects the lifecycle state and `PercentageComplete` exposes how far along the rollout is. That makes the bench useful for testing timeout, retry, and late-success behavior without introducing actual AWS dependencies.
+The response fields mimic AWS roughly: `Status` reflects the lifecycle state and
+`PercentageComplete` exposes how far along the rollout is. That makes the bench useful for
+testing timeout, retry, and late-success behavior without introducing actual AWS dependencies.

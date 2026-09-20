@@ -2,6 +2,9 @@
 [global]
 extend-enable = ["MD060"]
 
+[MD013]
+line-length = 227
+
 # Configure MD060 options
 [MD060]
 enabled = true

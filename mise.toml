@@ -5,6 +5,7 @@ terraform = "1.16.3"
 terragrunt = "1.1.5"
 golangci-lint = "2.13.2"
 gofumpt = "0.12.0"
+rumdl = "0.2.74"
 
 [tasks.fmt]
 description = "Format Go sources"
@@ -18,13 +19,17 @@ run = "go vet ./..."
 description = "Run golangci-lint"
 run = "golangci-lint run ./..."
 
+[tasks.lint-markdown]
+description = "Lint Markdown files"
+run = "rumdl check ."
+
 [tasks.test]
 depends = ["build-fake-aws"]
 description = "Run Go tests"
 run = "export CONVERGENCI_AWS_CLI_PATH=\"$PWD/testdata/fake-aws-bin/aws\" && go test ./..."
 
 [tasks.check]
-depends = ["build-fake-aws"]
+depends = ["build-fake-aws", "lint-markdown "]
 description = "Format, vet, and test the Go project"
 run = "gofumpt -w . && go vet ./... && export CONVERGENCI_AWS_CLI_PATH=\"$PWD/testdata/fake-aws-bin/aws\" && go test ./..."
 

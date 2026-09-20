@@ -131,9 +131,15 @@ flowchart LR
     Cfg --> AWSCLI
 ```
 
-`scan` and `await` share the `internal/scan` contract model but never call AWS directly from `internal/cli`; all AWS CLI invocations go through the single `internal/awscmd.Config.Run` seam, which is what the fake AWS CLI test binary substitutes.
+`scan` and `await` share the `internal/scan` contract model but never call AWS directly from
+`internal/cli`; all AWS CLI invocations go through the single `internal/awscmd.Config.Run` seam,
+which is what the fake AWS CLI test binary substitutes.
 
-Terraform state (and the state lock guarding it) is accessed only by the external `terraform` process. Convergenci never opens, reads, or locks Terraform state directly; it only consumes the `tfplan.json` that `terraform show -json` derives from it. This is why the lock/correlation boundary in Section 4 and the `--assert-all-settled` precondition in Section 14 are expressed as assumptions the caller must uphold, not as something Convergenci enforces itself.
+Terraform state (and the state lock guarding it) is accessed only by the external `terraform`
+process. Convergenci never opens, reads, or locks Terraform state directly; it only consumes the
+`tfplan.json` that `terraform show -json` derives from it. This is why the lock/correlation boundary
+in Section 4 and the `--assert-all-settled` precondition in Section 14 are expressed as assumptions
+the caller must uphold, not as something Convergenci enforces itself.
 
 ---
 
@@ -367,9 +373,14 @@ The convergence condition needs both:
 
 ## 10. Concurrency Is Assumed Away by a Lock, Not Resolved by Correlation
 
-An earlier version of this design assumed that multiple applies could overlap or that a later desired generation could supersede an earlier one, and it introduced a `SUPERSEDED` status to reason about that.
+An earlier version of this design assumed that multiple applies could overlap or that a later
+desired generation could supersede an earlier one, and it introduced a `SUPERSEDED` status to
+reason about that.
 
-That complexity is unnecessary if the caller guarantees, via a Terraform state lock (or equivalent serialization), that at most one relevant apply is in flight at a time. Convergenci does not need to invent its own locking; it only needs to assume the caller provides one and verify that assumption holds immediately before `apply` (see Section 14, `--assert-all-settled`).
+That complexity is unnecessary if the caller guarantees, via a Terraform state lock (or equivalent
+serialization), that at most one relevant apply is in flight at a time. Convergenci does not need to
+invent its own locking; it only needs to assume the caller provides one and verify that assumption
+holds immediately before `apply` (see Section 14, `--assert-all-settled`).
 
 Under that assumption, correlation no longer has to resolve conflicts between competing changes. It only has to answer:
 
@@ -481,7 +492,11 @@ The implementation should favor straightforward code over abstraction-heavy fram
 
 ## 14. `scan --assert-all-settled` and Lock-Based Correlation
 
-`--assert-all-settled` is a flag on the `scan` subcommand, not a standalone command or a global root flag. It reuses `scan`'s own plan-matching logic (`BuildContract`'s policy/regex matching, exposed as `MatchedResourceNames`) to resolve which AWS resources are relevant, so the two never disagree about what a plan touches. It takes a Terraform plan path, not a convergence contract path and not explicit resource names:
+`--assert-all-settled` is a flag on the `scan` subcommand, not a standalone command or a global
+root flag. It reuses `scan`'s own plan-matching logic (`BuildContract`'s policy/regex matching,
+exposed as `MatchedResourceNames`) to resolve which AWS resources are relevant, so the two never
+disagree about what a plan touches. It takes a Terraform plan path, not a convergence contract path
+and not explicit resource names:
 
 ```text
 convergenci scan tfplan.json
@@ -499,11 +514,19 @@ convergenci await convergence.json
 "the change described by this contract has converged"
 ```
 
-In this mode `scan` does not read or write a convergence contract or any other file: it is a stateless, point-in-time AWS check that reuses the plan-scanning code path instead of `scan`'s contract-emission path.
+In this mode `scan` does not read or write a convergence contract or any other file: it is a
+stateless, point-in-time AWS check that reuses the plan-scanning code path instead of `scan`'s
+contract-emission path.
 
-Its responsibility is limited to: for each AWS resource name resolved from the plan, observe AWS and fail (non-zero exit) if a relevant runtime operation is currently in progress (e.g. an ASG instance refresh already running or pending). This protects against running `apply` while a prior rotation has not finished. It dispatches by resource kind; ASG is the only kind implemented today, and future kinds (e.g. ECS) would be added the same way.
+Its responsibility is limited to: for each AWS resource name resolved from the plan, observe AWS and
+fail (non-zero exit) if a relevant runtime operation is currently in progress (e.g. an ASG instance
+refresh already running or pending). This protects against running `apply` while a prior rotation
+has not finished. It dispatches by resource kind; ASG is the only kind implemented today, and future
+kinds (e.g. ECS) would be added the same way.
 
-This command relies on the caller holding a Terraform state lock (or otherwise serializing applies) for the duration of `apply`. Convergenci does not implement locking itself; it only asserts, at one point in time, that the precondition the lock is meant to guarantee actually holds.
+This command relies on the caller holding a Terraform state lock (or otherwise serializing applies)
+for the duration of `apply`. Convergenci does not implement locking itself; it only asserts, at one
+point in time, that the precondition the lock is meant to guarantee actually holds.
 
 Given that guarantee, correlation is reduced to:
 
@@ -521,15 +544,27 @@ wait for it
 verify postcondition
 ```
 
-This removes the need for supersession handling (Section 10) while keeping the existing contract-based postcondition model (Section 7) unchanged: the contract still defines what "converged" means, `--assert-all-settled` only establishes that nothing was already in flight before the apply.
+This removes the need for supersession handling (Section 10) while keeping the existing
+contract-based postcondition model (Section 7) unchanged: the contract still defines what
+"converged" means, `--assert-all-settled` only establishes that nothing was already in flight before
+the apply.
 
-Importantly, `--assert-all-settled` is not a separate baseline-aware observation layer. It follows the same scan path for resource matching and any scan-phase side effects, and then adds one extra check: if a relevant AWS operation is already active, it exits non-zero. The baseline is still part of the scan/await correlation model as appropriate, but the flag is not a different mode or a different observation workflow.
+Importantly, `--assert-all-settled` is not a separate baseline-aware observation layer. It follows
+the same scan path for resource matching and any scan-phase side effects, and then adds one extra
+check: if a relevant AWS operation is already active, it exits non-zero. The baseline is still part
+of the scan/await correlation model as appropriate, but the flag is not a different mode or a
+different observation workflow.
 
-If stronger before/after correlation is needed later, it can be added on the scan/await correlation path without changing the fact that `--assert-all-settled` is just a scan path with an additional fail-fast exit condition.
+If stronger before/after correlation is needed later, it can be added on the scan/await correlation
+path without changing the fact that `--assert-all-settled` is just a scan path with an additional
+fail-fast exit condition.
 
 ### Terragrunt-style environments
 
-Multi-module, Terragrunt-style layouts are covered by `stubs/terragrunt-multi-stack.json` (multiple stacks/modules with multiple ASGs) and the `fake-aws-scenarios-terragrunt` mise task, which exercises `scan`, `--assert-all-settled`, `await`, and `report` against that layout. The billable end-to-end tests additionally cover a real Terragrunt-managed stack via `mise run billable-terragrunt-test`.
+Multi-module, Terragrunt-style layouts are covered by `stubs/terragrunt-multi-stack.json` (multiple
+stacks/modules with multiple ASGs) and the `fake-aws-scenarios-terragrunt` mise task, which exercises
+`scan`, `--assert-all-settled`, `await`, and `report` against that layout. The billable end-to-end
+tests additionally cover a real Terragrunt-managed stack via `mise run billable-terragrunt-test`.
 
 ---
 
@@ -630,7 +665,10 @@ sequenceDiagram
     CLI-->>U: exit code (0, timeout, or failure)
 ```
 
-Each retry iteration observes every resource in the contract concurrently; a single iteration is not scoped to one resource. Debug logging exposes which resources are still pending per iteration, and separately names any resource blocked on an unmet `desired_generation` requirement (e.g. a tag that has not yet rolled over), rather than only reporting an aggregate pending count.
+Each retry iteration observes every resource in the contract concurrently; a single iteration is not
+scoped to one resource. Debug logging exposes which resources are still pending per iteration, and
+separately names any resource blocked on an unmet `desired_generation` requirement (e.g. a tag that
+has not yet rolled over), rather than only reporting an aggregate pending count.
 
 ---
 
@@ -696,7 +734,12 @@ stateDiagram-v2
     Timeout --> [*]
 ```
 
-A resource that AWS reports as fully rolled out (refresh/activity `Successful`, instances `InService`) is not immediately converged if a `desired_generation` requirement, such as a tag, has not yet rolled over in the observed data. Convergenci treats this as a grace period rather than a failure: it stays `Pending` and retries rather than reporting false convergence or false failure. A requirement that cannot be verified from the runtime response (e.g. the field is absent) is treated as satisfied, so the grace period does not apply if AWS never reports on it at all.
+A resource that AWS reports as fully rolled out (refresh/activity `Successful`, instances
+`InService`) is not immediately converged if a `desired_generation` requirement, such as a tag, has
+not yet rolled over in the observed data. Convergenci treats this as a grace period rather than a
+failure: it stays `Pending` and retries rather than reporting false convergence or false failure. A
+requirement that cannot be verified from the runtime response (e.g. the field is absent) is treated
+as satisfied, so the grace period does not apply if AWS never reports on it at all.
 
 ---
 

@@ -360,12 +360,12 @@ convergenci doctor --template ./templates/report-as-text.tmpl ./artifacts/asg-pl
 
 Commands return `0` on success. Structured CLI failures use these exit codes:
 
-| Code | Meaning |
-| ---: | --- |
-| `201` | convergence contract exceeds the supported resource limit |
-| `210` | invalid command configuration or arguments |
-| `220` | input/output or artifact error |
-| `230` | convergence timeout |
+|  Code | Meaning                                                               |
+| ----: | --------------------------------------------------------------------- |
+| `201` | convergence contract exceeds the supported resource limit             |
+| `210` | invalid command configuration or arguments                            |
+| `220` | input/output or artifact error                                        |
+| `230` | convergence timeout                                                   |
 | `240` | convergence, AWS observation, rendering, or other operational failure |
 
 The billable timeout task explicitly treats `230` as its expected outcome.
@@ -513,11 +513,12 @@ change:
 mise install
 mise run check
 mise run lint
+mise run lint-markdown
 ```
 
 `mise run check` formats with the pinned `gofumpt`, runs `go vet`, builds the
-fake AWS CLI, and executes the Go tests. Linting is a separate task and is not
-included in `check`.
+fake AWS CLI, and executes the Go tests. Go and Markdown linting are separate
+tasks and are not included in `check`.
 
 ## Notes
 
