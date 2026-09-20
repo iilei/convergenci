@@ -302,7 +302,7 @@ func TestAwaitCommandFlagAfterPositionalPath(t *testing.T) {
 	t.Setenv("FAKE_AWS_SCENARIO", "success")
 	tempDir := t.TempDir()
 	contractPath := filepath.Join(tempDir, "contract.json")
-	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", DesiredGeneration: map[string]any{"rotation": "v2"}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
+	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", Name: "app-asg", DesiredGeneration: map[string]any{"rotation": "v2"}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
 	payload, err := json.Marshal(contract)
 	if err != nil {
 		t.Fatalf("json.Marshal returned error: %v", err)
@@ -317,6 +317,13 @@ func TestAwaitCommandFlagAfterPositionalPath(t *testing.T) {
 
 	if got := out.String(); !strings.Contains(got, "aws-cli-path: ") {
 		t.Fatalf("await output = %q, want it to contain aws-cli-path", got)
+	}
+	reportData, err := os.ReadFile(filepath.Join(tempDir, "contract.convergence-report.json"))
+	if err != nil {
+		t.Fatalf("ReadFile report returned error: %v", err)
+	}
+	if got, want := string(reportData), "arn:aws:autoscaling:us-east-1:123456789012:autoScalingGroup:::app-asg"; !strings.Contains(got, want) {
+		t.Fatalf("await report = %q, want it to contain ARN %q", got, want)
 	}
 }
 

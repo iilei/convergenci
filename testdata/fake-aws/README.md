@@ -30,6 +30,7 @@ If you still want to put the shim on `PATH`, that is optional, but it is not req
 - `in-progress` — returns a realistic `InProgress` payload with partial completion such as `45%`
 - `late-success` — returns `InProgress` for a short sequence of polls and then resolves to `Successful` once the delayed transition is reached
 - `in-progress-then-success` — a transitional mode that stays in progress before eventually succeeding
+- `terragrunt-multi-stack` — a transitional mode for the multi-stack Terragrunt-style bench
 - `in-progress-then-failed` — a transitional mode that stays in progress before eventually failing
 
 These scenarios are meant to exercise the exact guardrail and polling behavior used by the `scan --assert-all-settled` and `await` flows, without introducing a real AWS dependency.

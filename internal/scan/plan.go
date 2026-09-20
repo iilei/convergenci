@@ -56,6 +56,7 @@ type Contract struct {
 type ContractItem struct {
 	Address           string         `json:"address"`
 	Kind              string         `json:"kind"`
+	Name              string         `json:"name,omitempty"`
 	Status            string         `json:"status,omitempty"`
 	DesiredGeneration map[string]any `json:"desired_generation"`
 	Observation       Observation    `json:"observation"`
@@ -111,9 +112,11 @@ func BuildContract(plan TerraformPlan, policy RecordPolicy, addressRegex string,
 			continue
 		}
 
+		name, _ := resourceName(change)
 		entry := ContractItem{
 			Address: change.Address,
 			Kind:    "aws_asg",
+			Name:    name,
 			DesiredGeneration: map[string]any{
 				key: value,
 			},

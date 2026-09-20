@@ -371,7 +371,12 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status strin
 		}
 		return "converged", "", nil
 	}
-	resp, err := cfg.Run("autoscaling", "describe-instance-refreshes")
+	refreshStatus := ""
+	refreshArgs := []string{"autoscaling", "describe-instance-refreshes"}
+	if item.Name != "" {
+		refreshArgs = append(refreshArgs, "--auto-scaling-group-name", item.Name)
+	}
+	resp, err := cfg.Run(refreshArgs[0], refreshArgs[1:]...)
 	if err == nil {
 		var payload struct {
 			InstanceRefreshes []struct {
@@ -387,9 +392,9 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status strin
 			}
 			switch strings.ToUpper(payload.InstanceRefreshes[0].Status) {
 			case "SUCCESSFUL":
-				return "converged", "", nil
+				refreshStatus = "converged"
 			case "FAILED":
-				return "failed", "", nil
+				refreshStatus = "failed"
 			case "INPROGRESS":
 				return "pending", "", nil
 			}
@@ -398,10 +403,17 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status strin
 		if item.Status == "" || !strings.EqualFold(strings.TrimSpace(item.Status), "converged") {
 			return "pending", "", nil
 		}
-		return "converged", "", nil
+		refreshStatus = "converged"
 	}
-	resp, err = cfg.Run("autoscaling", "describe-auto-scaling-groups")
+	groupArgs := []string{"autoscaling", "describe-auto-scaling-groups"}
+	if item.Name != "" {
+		groupArgs = append(groupArgs, "--auto-scaling-group-name", item.Name)
+	}
+	resp, err = cfg.Run(groupArgs[0], groupArgs[1:]...)
 	if err != nil {
+		if refreshStatus != "" {
+			return refreshStatus, "", nil
+		}
 		if item.Status == "" || !strings.EqualFold(strings.TrimSpace(item.Status), "converged") {
 			return "pending", "", nil
 		}
@@ -423,6 +435,9 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status strin
 		return "", "", err
 	}
 	if len(payload.AutoScalingGroups) == 0 {
+		if refreshStatus != "" {
+			return refreshStatus, "", nil
+		}
 		return "pending", "", nil
 	}
 	group := payload.AutoScalingGroups[0]
@@ -449,6 +464,9 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status strin
 			continue
 		}
 		return "pending", arn, nil
+	}
+	if refreshStatus != "" {
+		return refreshStatus, arn, nil
 	}
 	return "converged", arn, nil
 }

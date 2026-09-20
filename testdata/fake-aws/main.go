@@ -32,6 +32,8 @@ func scenarioName(scenario string) string {
 		return "in-progress"
 	case "in-progress-then-success":
 		return "in-progress-then-success"
+	case "terragrunt-multi-stack":
+		return "terragrunt-multi-stack"
 	case "in-progress-then-failed":
 		return "in-progress-then-failed"
 	case "late-success":
@@ -46,9 +48,10 @@ func scenarioName(scenario string) string {
 func scenarioState(scenario string) string {
 	switch scenario {
 	case "in-progress":
+		incrementScenarioCount(scenario)
 		return "in-progress"
-	case "in-progress-then-success":
-		return delayedOutcome("in-progress-then-success", 2)
+	case "in-progress-then-success", "terragrunt-multi-stack":
+		return delayedOutcome(scenario, 2)
 	case "in-progress-then-failed":
 		return delayedOutcome("in-progress-then-failed", 2)
 	case "late-success":
@@ -155,7 +158,7 @@ func describeProgress(scenario string) (status string, percentage int, completed
 			return "Successful", 100, "2026-09-19T00:00:00Z"
 		}
 		return "InProgress", progressPercent(scenario, 30, 55, 75, 90), nil
-	case "in-progress-then-success":
+	case "in-progress-then-success", "terragrunt-multi-stack":
 		if state == "success" {
 			return "Successful", 100, "2026-09-19T00:00:00Z"
 		}
@@ -182,6 +185,10 @@ func requestedASGName(rest []string) string {
 		}
 	}
 	return "fake-asg"
+}
+
+func fakeASGARN(name string) string {
+	return fmt.Sprintf("arn:aws:autoscaling:us-east-1:123456789012:autoScalingGroup:::%s", name)
 }
 
 func applyFakeAWSDelay() {
@@ -242,6 +249,7 @@ func main() {
 			response := map[string]any{
 				"AutoScalingGroups": []map[string]any{{
 					"AutoScalingGroupName": asgName,
+					"AutoScalingGroupARN":  fakeASGARN(asgName),
 					"DesiredCapacity":      2,
 					"MinSize":              1,
 					"MaxSize":              3,
@@ -255,6 +263,7 @@ func main() {
 			if progressStatus == "InProgress" {
 				response["AutoScalingGroups"] = []map[string]any{{
 					"AutoScalingGroupName": asgName,
+					"AutoScalingGroupARN":  fakeASGARN(asgName),
 					"DesiredCapacity":      2,
 					"MinSize":              1,
 					"MaxSize":              3,
@@ -268,6 +277,7 @@ func main() {
 			if scenario == "failed" {
 				response["AutoScalingGroups"] = []map[string]any{{
 					"AutoScalingGroupName": asgName,
+					"AutoScalingGroupARN":  fakeASGARN(asgName),
 					"DesiredCapacity":      2,
 					"MinSize":              1,
 					"MaxSize":              3,

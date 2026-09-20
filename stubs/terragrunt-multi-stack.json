@@ -1,0 +1,74 @@
+{
+ "format_version": "1.0",
+ "terraform_version": "1.8.5",
+ "resource_changes": [
+  {
+   "address": "module.terragrunt[\"prod-us-east-1\"].module.platform.aws_autoscaling_group.web",
+   "type": "aws_autoscaling_group",
+   "change": {
+    "actions": ["update"],
+    "before": {
+     "name": "prod-us-east-1-web",
+     "tags": { "convergenci_rotation": "blue" },
+     "launch_template": { "version": "7" }
+    },
+    "after": {
+     "name": "prod-us-east-1-web",
+     "tags": { "convergenci_rotation": "green" },
+     "launch_template": { "version": "8" }
+    }
+   }
+  },
+  {
+   "address": "module.terragrunt[\"prod-us-east-1\"].module.platform.aws_autoscaling_group.worker",
+   "type": "aws_autoscaling_group",
+   "change": {
+    "actions": ["update"],
+    "before": {
+     "name": "prod-us-east-1-worker",
+     "tags": { "convergenci_rotation": "blue" },
+     "launch_template": { "version": "11" }
+    },
+    "after": {
+     "name": "prod-us-east-1-worker",
+     "tags": { "convergenci_rotation": "green" },
+     "launch_template": { "version": "12" }
+    }
+   }
+  },
+  {
+   "address": "module.terragrunt[\"prod-eu-west-1\"].module.platform.aws_autoscaling_group.web",
+   "type": "aws_autoscaling_group",
+   "change": {
+    "actions": ["update"],
+    "before": {
+     "name": "prod-eu-west-1-web",
+     "tags": { "convergenci_rotation": "blue" },
+     "launch_template": { "version": "7" }
+    },
+    "after": {
+     "name": "prod-eu-west-1-web",
+     "tags": { "convergenci_rotation": "green" },
+     "launch_template": { "version": "8" }
+    }
+   }
+  },
+  {
+   "address": "module.terragrunt[\"prod-eu-west-1\"].module.platform.aws_autoscaling_group.worker",
+   "type": "aws_autoscaling_group",
+   "change": {
+    "actions": ["update"],
+    "before": {
+     "name": "prod-eu-west-1-worker",
+     "tags": { "convergenci_rotation": "blue" },
+     "launch_template": { "version": "11" }
+    },
+    "after": {
+     "name": "prod-eu-west-1-worker",
+     "tags": { "convergenci_rotation": "green" },
+     "launch_template": { "version": "12" }
+    }
+   }
+  }
+ ]
+}

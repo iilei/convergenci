@@ -86,6 +86,34 @@ CONVERGENCI_AWAIT_TIMEOUT=2s CONVERGENCI_AWAIT_INTERVAL=750ms FAKE_AWS_DELAY=750
 ./convergenci report "${out_dir}/.convergence.convergence-report.json"
 """
 
+[tasks.fake-aws-scenarios-terragrunt]
+depends = ["build", "build-fake-aws"]
+description = "Exercise nested Terragrunt-style stacks through scan, assert, await, and report"
+run = """
+out_dir=".bench/terragrunt-multi-stack"; rm -rf "$out_dir"; mkdir -p "$out_dir";
+./convergenci scan stubs/terragrunt-multi-stack.json \
+--output-json "${out_dir}/.convergence.json" \
+--aws-cli-path "$PWD/testdata/fake-aws-bin/aws"
+
+for scenario in success in-progress; do
+    log="/tmp/convergenci-terragrunt-$scenario.log"
+    if FAKE_AWS_SCENARIO="$scenario" ./convergenci scan stubs/terragrunt-multi-stack.json \
+        --assert-all-settled --aws-cli-path "$PWD/testdata/fake-aws-bin/aws" >"$log" 2>&1; then
+        if [ "$scenario" = "in-progress" ]; then
+            echo "scenario=$scenario unexpectedly succeeded"; cat "$log"; exit 1
+        fi
+    elif [ "$scenario" = "success" ]; then
+        echo "scenario=$scenario unexpectedly failed"; cat "$log"; exit 1
+    fi
+    echo "scenario=$scenario"; cat "$log"; echo '---'
+done
+
+CONVERGENCI_AWAIT_TIMEOUT=3s CONVERGENCI_AWAIT_INTERVAL=100ms FAKE_AWS_DELAY=650ms FAKE_AWS_SCENARIO=success \
+./convergenci await "${out_dir}/.convergence.json" \
+--aws-cli-path "$PWD/testdata/fake-aws-bin/aws"
+./convergenci report "${out_dir}/.convergence.convergence-report.json"
+"""
+
 [tasks.render-report]
 description = "Render the generated fake AWS reports with the built-in report renderer"
 depends = [ "fake-aws-scenarios-await"]
