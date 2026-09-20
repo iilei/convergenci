@@ -402,8 +402,6 @@ TIMEOUT
 
 with `NOT_STARTED` / `UNKNOWN` used only as internal, non-terminal states while polling.
 
-`SUPERSEDED` is removed from the product. Terraform resource address, desired generation, and the pre-apply AWS state remain sufficient to identify the runtime operation to observe; the postcondition in the convergence contract remains the authority on what "converged" means, since a runtime identifier alone (e.g. an `InstanceRefreshId`) is not always sufficient to prove the desired state was reached.
-
 ---
 
 ## 11. AWS CLI Instead of AWS SDK
@@ -670,12 +668,6 @@ Exit code:
 non-zero
 ```
 
-### Superseded
-
-A later runtime transition has replaced the originally correlated operation.
-
-Whether this is terminal or resolves to `CONVERGED` depends on whether the final observed state satisfies the original desired postcondition.
-
 ### Per-resource convergence state
 
 Each resource in the contract moves through its own observation state independent of the overall `await` exit code:
@@ -826,7 +818,6 @@ flowchart TD
     E --> F["AWS changes"]
     F --> G["convergenci await convergence.json"]
     G --> H["CONVERGED"]
-    G --> I["SUPERSEDED"]
     G --> J["FAILED"]
     G --> K["TIMEOUT"]
     H --> L["convergenci report convergence-report.json"]

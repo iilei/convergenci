@@ -422,6 +422,13 @@ This supports the common log prefix style:
 [DEBUG 2026-09-19T12:00:00Z] status=InProgress pct=45
 ```
 
+For a fuller example of what a Go text template can do here — conditionals,
+loops, and custom helper functions — see the built-in
+[`templates/report-as-text.tmpl`](templates/report-as-text.tmpl). It is the
+template `report` renders by default, and it is a good starting point for
+power users who want to build a more elaborate `--debug-format`/
+`CONVERGENCI_DEBUG_FORMAT` template than the one-liners above.
+
 ## Version output
 
 The CLI version output follows:
