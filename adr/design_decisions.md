@@ -83,6 +83,14 @@ It returns a non-zero exit code when convergence cannot be established, for exam
 
 ```mermaid
 flowchart LR
+    subgraph TF["terraform (external process)"]
+        TFCLI["terraform plan / apply"]
+        TFState[("Terraform state\n+ state lock")]
+        TFCLI --> TFState
+    end
+
+    TFPlanJSON["tfplan.json"]
+
     subgraph CLI["cmd/convergenci"]
         Main["main.go\nrun()"]
     end
@@ -107,6 +115,8 @@ flowchart LR
     AWSCLI[("aws CLI\nor fake-aws stub")]
     Templates["templates/report-as-text.tmpl"]
 
+    TFCLI --> TFPlanJSON
+    TFPlanJSON --> Scan
     Main --> Root
     Root --> Scan
     Root --> Await
@@ -122,6 +132,8 @@ flowchart LR
 ```
 
 `scan` and `await` share the `internal/scan` contract model but never call AWS directly from `internal/cli`; all AWS CLI invocations go through the single `internal/awscmd.Config.Run` seam, which is what the fake AWS CLI test binary substitutes.
+
+Terraform state (and the state lock guarding it) is accessed only by the external `terraform` process. Convergenci never opens, reads, or locks Terraform state directly; it only consumes the `tfplan.json` that `terraform show -json` derives from it. This is why the lock/correlation boundary in Section 4 and the `--assert-all-settled` precondition in Section 14 are expressed as assumptions the caller must uphold, not as something Convergenci enforces itself.
 
 ---
 
