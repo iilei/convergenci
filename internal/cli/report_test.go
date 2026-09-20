@@ -40,7 +40,6 @@ func TestReportCommandRendersConvergedReport(t *testing.T) {
 			t.Fatalf("report output = %q, want it to contain %q", got, want)
 		}
 	}
-
 }
 
 func TestReportCommandRendersPendingReport(t *testing.T) {
@@ -126,7 +125,11 @@ func TestReportCommandColorForcedOn(t *testing.T) {
 
 	tempDir := t.TempDir()
 	reportPath := filepath.Join(tempDir, "report.json")
-	if err := os.WriteFile(reportPath, []byte(`{"status": "converged", "resources": [{"address": "asg.app", "status": "converged"}]}`), 0o644); err != nil {
+	if err := os.WriteFile(
+		reportPath,
+		[]byte(`{"status": "converged", "resources": [{"address": "asg.app", "status": "converged"}]}`),
+		0o644,
+	); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
 
@@ -148,7 +151,11 @@ func TestReportCommandColorForcedOff(t *testing.T) {
 
 	tempDir := t.TempDir()
 	reportPath := filepath.Join(tempDir, "report.json")
-	if err := os.WriteFile(reportPath, []byte(`{"status": "pending", "resources": [{"address": "asg.app", "status": "pending"}]}`), 0o644); err != nil {
+	if err := os.WriteFile(
+		reportPath,
+		[]byte(`{"status": "pending", "resources": [{"address": "asg.app", "status": "pending"}]}`),
+		0o644,
+	); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
 

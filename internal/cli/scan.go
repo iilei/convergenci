@@ -37,7 +37,11 @@ func (c *Command) executeScan(args []string) error {
 	outputJSON := fs.String("output-json", "", "write the generated convergence contract to a JSON file")
 	jsonlines := fs.Bool("jsonlines", false, "write the generated convergence contract as JSON Lines")
 	force := fs.Bool("force", false, "overwrite an existing output file")
-	assertAllSettled := fs.Bool("assert-all-settled", false, "assert that no relevant AWS operation is currently in progress for the plan's resources, instead of emitting a contract")
+	assertAllSettled := fs.Bool(
+		"assert-all-settled",
+		false,
+		"assert that no relevant AWS operation is currently in progress for the plan's resources, instead of emitting a contract",
+	)
 	awsCLIPath, awsProfileName := awscmd.RegisterFlags(fs)
 	fs.Usage = func() {
 		fmt.Fprintf(c.out, "Usage: convergenci scan <tfplan.json>\n")
@@ -47,7 +51,10 @@ func (c *Command) executeScan(args []string) error {
 		fmt.Fprintf(c.out, "  --output-json PATH    Write the generated convergence contract to a JSON file at PATH\n")
 		fmt.Fprintf(c.out, "  --jsonlines           Write the generated convergence contract as JSON Lines\n")
 		fmt.Fprintf(c.out, "  --force              Overwrite an existing output file\n")
-		fmt.Fprintf(c.out, "  --assert-all-settled Assert nothing relevant is currently converging for the plan's resources\n")
+		fmt.Fprintf(
+			c.out,
+			"  --assert-all-settled Assert nothing relevant is currently converging for the plan's resources\n",
+		)
 		fmt.Fprint(c.out, awscmd.UsageText())
 		fmt.Fprintf(c.out, "  -h, --help            Show help\n")
 	}
@@ -143,7 +150,10 @@ func (c *Command) executeScanAssertAllSettled(planPath string, cmdCfg awscmd.Con
 		}
 	}
 	if len(notSettled) > 0 {
-		return &ExitCodeError{Code: codeGenericFailure, Message: fmt.Sprintf("not settled: %s", strings.Join(notSettled, ", "))}
+		return &ExitCodeError{
+			Code:    codeGenericFailure,
+			Message: fmt.Sprintf("not settled: %s", strings.Join(notSettled, ", ")),
+		}
 	}
 
 	fmt.Fprintln(c.out, "all resources settled")
@@ -193,7 +203,7 @@ func safeOutputFilePath(path string, force bool) (string, error) {
 	return cleaned, nil
 }
 
-func writeScanArtifact(path string, contract scan.Contract, jsonlines bool, force bool) error {
+func writeScanArtifact(path string, contract scan.Contract, jsonlines, force bool) error {
 	var data []byte
 	var err error
 	if jsonlines {

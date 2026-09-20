@@ -188,7 +188,10 @@ func (c *Command) executeReport(args []string) error {
 
 	tpl, err := template.New("report-as-text").Funcs(reportTemplateFuncs(report)).Parse(templates.ReportAsText)
 	if err != nil {
-		return &ExitCodeError{Code: codeGenericFailure, Message: fmt.Sprintf("unable to parse report template: %v", err)}
+		return &ExitCodeError{
+			Code:    codeGenericFailure,
+			Message: fmt.Sprintf("unable to parse report template: %v", err),
+		}
 	}
 	if err := tpl.Execute(c.out, report); err != nil {
 		return &ExitCodeError{Code: codeGenericFailure, Message: fmt.Sprintf("unable to render report: %v", err)}

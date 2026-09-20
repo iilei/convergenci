@@ -154,7 +154,10 @@ printf '%s\n' "$FAKE_AWS_GROUP_RESPONSE"
 	}
 	cfg := awscmd.Config{BinaryPath: awsPath}
 
-	t.Setenv("FAKE_AWS_GROUP_RESPONSE", `{"AutoScalingGroups":[{"AutoScalingGroupARN":"arn:example","Tags":[{"Key":"rotation","Value":"blue"}],"Activities":[{"StatusCode":"Successful","Progress":100}],"Instances":[{"LifecycleState":"InService"}]}]}`)
+	t.Setenv(
+		"FAKE_AWS_GROUP_RESPONSE",
+		`{"AutoScalingGroups":[{"AutoScalingGroupARN":"arn:example","Tags":[{"Key":"rotation","Value":"blue"}],"Activities":[{"StatusCode":"Successful","Progress":100}],"Instances":[{"LifecycleState":"InService"}]}]}`,
+	)
 	status, _, err := observeAWSResource(item, cfg)
 	if err != nil {
 		t.Fatalf("observeAWSResource returned error: %v", err)
@@ -165,7 +168,9 @@ printf '%s\n' "$FAKE_AWS_GROUP_RESPONSE"
 
 	SetDebug(true)
 	t.Cleanup(func() { SetDebug(false) })
-	if err := ConfigureDebugFormat("{{ .Event }} {{ .RequirementType }} {{ .RequirementKey }} value={{ .Wanted }}"); err != nil {
+	if err := ConfigureDebugFormat(
+		"{{ .Event }} {{ .RequirementType }} {{ .RequirementKey }} value={{ .Wanted }}",
+	); err != nil {
 		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
 	}
 	oldStderr := os.Stderr
@@ -175,7 +180,10 @@ printf '%s\n' "$FAKE_AWS_GROUP_RESPONSE"
 	}
 	os.Stderr = writePipe
 
-	t.Setenv("FAKE_AWS_GROUP_RESPONSE", `{"AutoScalingGroups":[{"AutoScalingGroupARN":"arn:example","Tags":[{"Key":"rotation","Value":"green"}],"Activities":[{"StatusCode":"Successful","Progress":100}],"Instances":[{"LifecycleState":"InService"}]}]}`)
+	t.Setenv(
+		"FAKE_AWS_GROUP_RESPONSE",
+		`{"AutoScalingGroups":[{"AutoScalingGroupARN":"arn:example","Tags":[{"Key":"rotation","Value":"green"}],"Activities":[{"StatusCode":"Successful","Progress":100}],"Instances":[{"LifecycleState":"InService"}]}]}`,
+	)
 	status, _, err = observeAWSResource(item, cfg)
 	_ = writePipe.Close()
 	os.Stderr = oldStderr
@@ -237,7 +245,9 @@ printf '%s\n' '{"AutoScalingGroups":[{"AutoScalingGroupARN":"arn:example","Activ
 	t.Setenv("FAKE_AWS_TEST_STATE", statePath)
 	SetDebug(true)
 	t.Cleanup(func() { SetDebug(false) })
-	if err := ConfigureDebugFormat("{{ .Event }} {{ .RetryIteration }}/{{ .RetryLimit }} {{ .Status }} resources={{ join \",\" .ResourceNames }} converged={{ join \",\" .ConvergedResources }}"); err != nil {
+	if err := ConfigureDebugFormat(
+		"{{ .Event }} {{ .RetryIteration }}/{{ .RetryLimit }} {{ .Status }} resources={{ join \",\" .ResourceNames }} converged={{ join \",\" .ConvergedResources }}",
+	); err != nil {
 		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
 	}
 
@@ -270,7 +280,9 @@ printf '%s\n' '{"AutoScalingGroups":[{"AutoScalingGroupARN":"arn:example","Activ
 	debugOutput := string(output)
 	startedIndex := strings.Index(debugOutput, "retry_started 1/")
 	satisfiedIndex := strings.Index(debugOutput, "retry_satisfied 2/")
-	if startedIndex < 0 || satisfiedIndex < 0 || startedIndex > satisfiedIndex || !strings.Contains(debugOutput, "resources=example-asg") || !strings.Contains(debugOutput, "converged=example-asg") {
+	if startedIndex < 0 || satisfiedIndex < 0 || startedIndex > satisfiedIndex ||
+		!strings.Contains(debugOutput, "resources=example-asg") ||
+		!strings.Contains(debugOutput, "converged=example-asg") {
 		t.Fatalf("debug output = %q, want retry lifecycle events with resource names", output)
 	}
 }

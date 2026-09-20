@@ -46,7 +46,8 @@ func TestPreferAwaitBaseline(t *testing.T) {
 			if len(got.Resources) > 0 {
 				gotResource := got.Resources[0]
 				wantResource := test.want.Resources[0]
-				if gotResource.Address != wantResource.Address || gotResource.Status != wantResource.Status || gotResource.Observation.Strategy != wantResource.Observation.Strategy {
+				if gotResource.Address != wantResource.Address || gotResource.Status != wantResource.Status ||
+					gotResource.Observation.Strategy != wantResource.Observation.Strategy {
 					t.Fatalf("resource = %#v, want %#v", gotResource, wantResource)
 				}
 			}

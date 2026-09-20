@@ -21,7 +21,10 @@ func TestBuildContractDefaultASGRotation(t *testing.T) {
 	}
 
 	got := contract.Resources[0].DesiredGeneration
-	if len(got) != 2 || got[0].Type != "tag" || got[0].Key != "rotation" || got[0].Value != "bb" || got[1].Type != "launch_template" || got[1].Key != "version" || got[1].Value != "6" {
+	if len(got) != 2 || got[0].Type != "tag" || got[0].Key != "rotation" || got[0].Value != "bb" ||
+		got[1].Type != "launch_template" ||
+		got[1].Key != "version" ||
+		got[1].Value != "6" {
 		t.Fatalf("desired generation = %#v, want tag rotation=bb and launch_template version=6", got)
 	}
 }
@@ -85,7 +88,10 @@ func TestBuildContractNestedModuleComplexAddress(t *testing.T) {
 	}
 
 	got := contract.Resources[0].DesiredGeneration
-	if len(got) != 2 || got[0].Type != "tag" || got[0].Key != "rotation" || got[0].Value != "green" || got[1].Type != "launch_template" || got[1].Key != "version" || got[1].Value != "4" {
+	if len(got) != 2 || got[0].Type != "tag" || got[0].Key != "rotation" || got[0].Value != "green" ||
+		got[1].Type != "launch_template" ||
+		got[1].Key != "version" ||
+		got[1].Value != "4" {
 		t.Fatalf("desired generation = %#v, want tag rotation=green and launch_template version=4", got)
 	}
 }
@@ -146,7 +152,9 @@ func TestBuildContractFiltersChangesAndUsesCustomIndicators(t *testing.T) {
 	if resource.Name != "custom-name" {
 		t.Fatalf("resource name = %q, want %q", resource.Name, "custom-name")
 	}
-	if len(resource.DesiredGeneration) != 1 || resource.DesiredGeneration[0].Type != "indicator" || resource.DesiredGeneration[0].Key != "custom" || resource.DesiredGeneration[0].Value != "generation-7" {
+	if len(resource.DesiredGeneration) != 1 || resource.DesiredGeneration[0].Type != "indicator" ||
+		resource.DesiredGeneration[0].Key != "custom" ||
+		resource.DesiredGeneration[0].Value != "generation-7" {
 		t.Fatalf("desired generation = %#v, want indicator custom=generation-7", resource.DesiredGeneration)
 	}
 }
@@ -264,7 +272,15 @@ func TestNestedValue(t *testing.T) {
 			}
 			got, ok := nestedValue(input, test.path)
 			if ok != test.ok || got != test.want {
-				t.Fatalf("nestedValue(%#v, %q) = (%#v, %t), want (%#v, %t)", input, test.path, got, ok, test.want, test.ok)
+				t.Fatalf(
+					"nestedValue(%#v, %q) = (%#v, %t), want (%#v, %t)",
+					input,
+					test.path,
+					got,
+					ok,
+					test.want,
+					test.ok,
+				)
 			}
 		})
 	}

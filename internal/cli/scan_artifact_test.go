@@ -38,8 +38,16 @@ func TestSafeOutputFilePathForceAllowsOverwrite(t *testing.T) {
 func TestWriteScanArtifactJSONLinesCreatesParentDirectories(t *testing.T) {
 	outputPath := filepath.Join(t.TempDir(), "nested", "contract.jsonlines")
 	contract := scan.Contract{Resources: []scan.ContractItem{
-		{Address: "asg.one", Kind: "aws_asg", DesiredGeneration: []scan.GenerationRequirement{{Type: "tag", Key: "rotation", Value: "blue"}}},
-		{Address: "asg.two", Kind: "aws_asg", DesiredGeneration: []scan.GenerationRequirement{{Type: "launch_template", Key: "version", Value: "7"}}},
+		{
+			Address:           "asg.one",
+			Kind:              "aws_asg",
+			DesiredGeneration: []scan.GenerationRequirement{{Type: "tag", Key: "rotation", Value: "blue"}},
+		},
+		{
+			Address:           "asg.two",
+			Kind:              "aws_asg",
+			DesiredGeneration: []scan.GenerationRequirement{{Type: "launch_template", Key: "version", Value: "7"}},
+		},
 	}}
 
 	if err := writeScanArtifact(outputPath, contract, true, false); err != nil {

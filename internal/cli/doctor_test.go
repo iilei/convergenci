@@ -32,7 +32,9 @@ func TestDoctorCommandReportsProfileCheckFailure(t *testing.T) {
 	cmd := NewRootCommand(Version{})
 	cmd.SetOut(&out)
 
-	err := cmd.ExecuteArgs([]string{"doctor", "--aws-cli-path", fakeAWSCLIPath(t), "--aws-profile-name", "test-profile"})
+	err := cmd.ExecuteArgs(
+		[]string{"doctor", "--aws-cli-path", fakeAWSCLIPath(t), "--aws-profile-name", "test-profile"},
+	)
 	if err == nil || !strings.Contains(err.Error(), "AWS caller identity check failed") {
 		t.Fatalf("ExecuteArgs error = %v, want caller identity failure", err)
 	}
@@ -55,7 +57,9 @@ func TestDoctorCommandRendersReportWithCustomTemplate(t *testing.T) {
 	var out bytes.Buffer
 	cmd := NewRootCommand(Version{})
 	cmd.SetOut(&out)
-	if err := cmd.ExecuteArgs([]string{"doctor", "--aws-cli-path", fakeAWSCLIPath(t), "--template", templatePath, reportPath}); err != nil {
+	if err := cmd.ExecuteArgs(
+		[]string{"doctor", "--aws-cli-path", fakeAWSCLIPath(t), "--template", templatePath, reportPath},
+	); err != nil {
 		t.Fatalf("ExecuteArgs returned error: %v", err)
 	}
 
@@ -106,7 +110,10 @@ func TestDoctorCommandRejectsInvalidReportJSONAndTemplate(t *testing.T) {
 	var out bytes.Buffer
 	cmd := NewRootCommand(Version{})
 	cmd.SetOut(&out)
-	if err := cmd.ExecuteArgs([]string{"doctor", "--aws-cli-path", fakeAWSCLIPath(t), "--template", missingTemplate, invalidReport}); err == nil || !strings.Contains(err.Error(), "decode report") {
+	if err := cmd.ExecuteArgs(
+		[]string{"doctor", "--aws-cli-path", fakeAWSCLIPath(t), "--template", missingTemplate, invalidReport},
+	); err == nil ||
+		!strings.Contains(err.Error(), "decode report") {
 		t.Fatalf("invalid report error = %v, want decode report error", err)
 	}
 
@@ -114,7 +121,10 @@ func TestDoctorCommandRejectsInvalidReportJSONAndTemplate(t *testing.T) {
 	if err := os.WriteFile(validReport, []byte(`{"status":"pending"}`), 0o644); err != nil {
 		t.Fatalf("os.WriteFile valid report returned error: %v", err)
 	}
-	if err := cmd.ExecuteArgs([]string{"doctor", "--aws-cli-path", fakeAWSCLIPath(t), "--template", missingTemplate, validReport}); err == nil || !strings.Contains(err.Error(), "parse template") {
+	if err := cmd.ExecuteArgs(
+		[]string{"doctor", "--aws-cli-path", fakeAWSCLIPath(t), "--template", missingTemplate, validReport},
+	); err == nil ||
+		!strings.Contains(err.Error(), "parse template") {
 		t.Fatalf("missing template error = %v, want parse template error", err)
 	}
 }

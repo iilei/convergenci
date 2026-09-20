@@ -110,7 +110,9 @@ func TestConfigureDebugFormatRendersRetryLifecycleFields(t *testing.T) {
 	SetDebug(true)
 	defer SetDebug(false)
 
-	if err := ConfigureDebugFormat("{{ .Event }} {{ .RetryIteration }}/{{ .RetryLimit }} {{ join \",\" .ResourceNames }} {{ .Elapsed }}"); err != nil {
+	if err := ConfigureDebugFormat(
+		"{{ .Event }} {{ .RetryIteration }}/{{ .RetryLimit }} {{ join \",\" .ResourceNames }} {{ .Elapsed }}",
+	); err != nil {
 		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
 	}
 
@@ -133,7 +135,9 @@ func TestConfigureDebugFormatRendersSatisfiedRetryFields(t *testing.T) {
 	SetDebug(true)
 	defer SetDebug(false)
 
-	if err := ConfigureDebugFormat("{{ .Event }} {{ .RetryIteration }}/{{ .RetryLimit }} {{ .Status }} {{ .Message }}"); err != nil {
+	if err := ConfigureDebugFormat(
+		"{{ .Event }} {{ .RetryIteration }}/{{ .RetryLimit }} {{ .Status }} {{ .Message }}",
+	); err != nil {
 		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
 	}
 
@@ -153,7 +157,9 @@ func TestConfigureDebugFormatRendersObservationFields(t *testing.T) {
 	SetDebug(true)
 	defer SetDebug(false)
 
-	if err := ConfigureDebugFormat("{{ .Event }} {{ .Resource }} {{ .Status }} {{ .PercentageComplete }} {{ .Cause }}"); err != nil {
+	if err := ConfigureDebugFormat(
+		"{{ .Event }} {{ .Resource }} {{ .Status }} {{ .PercentageComplete }} {{ .Cause }}",
+	); err != nil {
 		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
 	}
 
@@ -173,7 +179,9 @@ func TestConfigureDebugFormatRendersDesiredGenerationPendingFields(t *testing.T)
 	SetDebug(true)
 	defer SetDebug(false)
 
-	if err := ConfigureDebugFormat("{{ .Event }} {{ .Resource }} {{ .RequirementType }} {{ .RequirementKey }} want={{ .Wanted }} actual={{ .Actual }}"); err != nil {
+	if err := ConfigureDebugFormat(
+		"{{ .Event }} {{ .Resource }} {{ .RequirementType }} {{ .RequirementKey }} want={{ .Wanted }} actual={{ .Actual }}",
+	); err != nil {
 		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
 	}
 
@@ -206,7 +214,8 @@ func TestDefaultDebugFormatRendersDesiredGenerationPendingProminently(t *testing
 		"Wanted":          "v2",
 		"Actual":          "v1",
 	})
-	if !strings.Contains(got, "waiting for tag rotation on worker-asg") || !strings.Contains(got, "want=v2") || !strings.Contains(got, "actual=v1") {
+	if !strings.Contains(got, "waiting for tag rotation on worker-asg") || !strings.Contains(got, "want=v2") ||
+		!strings.Contains(got, "actual=v1") {
 		t.Fatalf("renderDebugTemplate = %q, want prominent desired generation wait message", got)
 	}
 }
@@ -215,7 +224,9 @@ func TestConfigureDebugFormatRendersDesiredGenerationMetFields(t *testing.T) {
 	SetDebug(true)
 	defer SetDebug(false)
 
-	if err := ConfigureDebugFormat("{{ .Event }} {{ .Resource }} {{ .RequirementType }} {{ .RequirementKey }} value={{ .Wanted }}"); err != nil {
+	if err := ConfigureDebugFormat(
+		"{{ .Event }} {{ .Resource }} {{ .RequirementType }} {{ .RequirementKey }} value={{ .Wanted }}",
+	); err != nil {
 		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
 	}
 
@@ -257,7 +268,9 @@ func TestConfigureDebugFormatSupportsPrefixAndTimestamp(t *testing.T) {
 	SetDebug(true)
 	defer SetDebug(false)
 
-	if err := ConfigureDebugFormat("[{{ .Level }} {{ .Timestamp }}] status={{ .Status }} pct={{ .PercentageComplete }}"); err != nil {
+	if err := ConfigureDebugFormat(
+		"[{{ .Level }} {{ .Timestamp }}] status={{ .Status }} pct={{ .PercentageComplete }}",
+	); err != nil {
 		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
 	}
 
@@ -311,7 +324,9 @@ func TestLogLineDoesNotDoublePrefixRenderedOutput(t *testing.T) {
 	SetDebug(true)
 	defer SetDebug(false)
 
-	if err := ConfigureDebugFormat("[{{ .Level }} {{ .Timestamp }}] status={{ .Status }} pct={{ .PercentageComplete }}"); err != nil {
+	if err := ConfigureDebugFormat(
+		"[{{ .Level }} {{ .Timestamp }}] status={{ .Status }} pct={{ .PercentageComplete }}",
+	); err != nil {
 		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
 	}
 

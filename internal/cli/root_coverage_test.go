@@ -35,7 +35,10 @@ func TestParseFlagsWithPositionals(t *testing.T) {
 	fs.Bool("verbose", false, "verbose output")
 	fs.String("name", "", "name")
 
-	positionals, err := parseFlagsWithPositionals(fs, []string{"first.json", "--verbose", "second.json", "--name", "example", "--", "literal", "--name"})
+	positionals, err := parseFlagsWithPositionals(
+		fs,
+		[]string{"first.json", "--verbose", "second.json", "--name", "example", "--", "literal", "--name"},
+	)
 	if err != nil {
 		t.Fatalf("parseFlagsWithPositionals returned error: %v", err)
 	}

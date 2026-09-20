@@ -17,7 +17,11 @@ func (c *Command) executeDoctor(args []string) error {
 	fs := flag.NewFlagSet("convergenci doctor", flag.ContinueOnError)
 	fs.SetOutput(c.out)
 
-	templatePath := fs.String("template", filepath.FromSlash("templates/report-as-text.tmpl"), "path to a text template used to render a report file")
+	templatePath := fs.String(
+		"template",
+		filepath.FromSlash("templates/report-as-text.tmpl"),
+		"path to a text template used to render a report file",
+	)
 	awsCLIPath, awsProfileName := awscmd.RegisterFlags(fs)
 	fs.Usage = func() {
 		fmt.Fprintf(c.out, "Usage: convergenci doctor [--template PATH] [report.json]\n\n")
@@ -99,7 +103,9 @@ func checkAWSCLI(cfg awscmd.Config) error {
 
 	callerCmd := exec.Command(binaryPath, "sts", "get-caller-identity")
 	if cfg.Profile != "" {
-		callerCmd.Args = append(callerCmd.Args[:2], append([]string{"--profile", cfg.Profile}, callerCmd.Args[2:]...)...)
+		callerCmd.Args = append(
+			callerCmd.Args[:2],
+			append([]string{"--profile", cfg.Profile}, callerCmd.Args[2:]...)...)
 	}
 	callerOut, err := callerCmd.CombinedOutput()
 	if err != nil {

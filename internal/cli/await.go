@@ -81,7 +81,11 @@ func (c *Command) executeAwait(args []string) error {
 	timeout := fs.Duration("timeout", defaultTimeout, "maximum time to wait before failing")
 	interval := fs.Duration("interval", defaultInterval, "polling interval between checks")
 	force := fs.Bool("force", false, "overwrite an existing report file")
-	debugFormat := fs.String("debug-format", envDebugFormat, "template for debug progress output; e.g. '{{ .Status }} {{ .PercentageComplete }}%' ")
+	debugFormat := fs.String(
+		"debug-format",
+		envDebugFormat,
+		"template for debug progress output; e.g. '{{ .Status }} {{ .PercentageComplete }}%' ",
+	)
 	awsCLIPath, awsProfileName := awscmd.RegisterFlags(fs)
 	fs.Usage = func() {
 		fmt.Fprintf(c.out, "Usage: convergenci await <convergence.json>\n\n")
@@ -90,7 +94,10 @@ func (c *Command) executeAwait(args []string) error {
 		fmt.Fprintf(c.out, "  --timeout          Maximum time to wait before failing\n")
 		fmt.Fprintf(c.out, "  --interval         Polling interval between checks\n")
 		fmt.Fprintf(c.out, "  --force            Overwrite an existing report file\n")
-		fmt.Fprintf(c.out, "  --debug-format     Template for debug progress output, e.g. '{{ .Status }} {{ .PercentageComplete }}%%'\n")
+		fmt.Fprintf(
+			c.out,
+			"  --debug-format     Template for debug progress output, e.g. '{{ .Status }} {{ .PercentageComplete }}%%'\n",
+		)
 		fmt.Fprint(c.out, awscmd.UsageText())
 		fmt.Fprintf(c.out, "  -h, --help         Show help\n")
 	}
@@ -156,18 +163,45 @@ func (c *Command) executeAwait(args []string) error {
 		contract = result.Contract
 	}
 	if err != nil {
-		if reportErr := writeAwaitReport(path, contract, result.Status, *force, result.ResourceWaits, result.StartedAt, result.FinishedAt); reportErr != nil {
-			return &ExitCodeError{Code: codeIOError, Message: fmt.Sprintf("unable to write summary report: %v", reportErr)}
+		if reportErr := writeAwaitReport(
+			path,
+			contract,
+			result.Status,
+			*force,
+			result.ResourceWaits,
+			result.StartedAt,
+			result.FinishedAt,
+		); reportErr != nil {
+			return &ExitCodeError{
+				Code:    codeIOError,
+				Message: fmt.Sprintf("unable to write summary report: %v", reportErr),
+			}
 		}
 		return err
 	}
 	if result.Status == "converged" {
-		if err := writeAwaitReport(path, contract, result.Status, *force, result.ResourceWaits, result.StartedAt, result.FinishedAt); err != nil {
+		if err := writeAwaitReport(
+			path,
+			contract,
+			result.Status,
+			*force,
+			result.ResourceWaits,
+			result.StartedAt,
+			result.FinishedAt,
+		); err != nil {
 			return &ExitCodeError{Code: codeIOError, Message: fmt.Sprintf("unable to write summary report: %v", err)}
 		}
 		return nil
 	}
-	if err := writeAwaitReport(path, contract, result.Status, *force, result.ResourceWaits, result.StartedAt, result.FinishedAt); err != nil {
+	if err := writeAwaitReport(
+		path,
+		contract,
+		result.Status,
+		*force,
+		result.ResourceWaits,
+		result.StartedAt,
+		result.FinishedAt,
+	); err != nil {
 		return &ExitCodeError{Code: codeIOError, Message: fmt.Sprintf("unable to write summary report: %v", err)}
 	}
 	return &ExitCodeError{Code: result.ExitCode, Message: result.Message}
@@ -261,14 +295,25 @@ type awaitPollResult struct {
 	FinishedAt    time.Time
 }
 
-func pollAwait(contract scan.Contract, timeout, interval time.Duration, cmdCfg awscmd.Config) (result awaitPollResult, err error) {
+func pollAwait(
+	contract scan.Contract,
+	timeout, interval time.Duration,
+	cmdCfg awscmd.Config,
+) (result awaitPollResult, err error) {
 	start := time.Now().UTC()
 	defer func() {
 		result.StartedAt = start
 		result.FinishedAt = time.Now().UTC()
 	}()
 	if len(contract.Resources) == 0 {
-		return awaitPollResult{Status: "converged", Message: "no resources to check", ExitCode: 0, Pending: 0, Converged: 0, Contract: contract}, nil
+		return awaitPollResult{
+			Status:    "converged",
+			Message:   "no resources to check",
+			ExitCode:  0,
+			Pending:   0,
+			Converged: 0,
+			Contract:  contract,
+		}, nil
 	}
 	start = time.Now().UTC()
 	maxAttempts := 1
@@ -293,7 +338,15 @@ func pollAwait(contract scan.Contract, timeout, interval time.Duration, cmdCfg a
 		}
 		pending, converged, status, message, waits, err := awsContractState(contract, cmdCfg)
 		if err != nil {
-			return awaitPollResult{Status: "failed", Message: err.Error(), ExitCode: codeGenericFailure, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, err
+			return awaitPollResult{
+				Status:        "failed",
+				Message:       err.Error(),
+				ExitCode:      codeGenericFailure,
+				Pending:       pending,
+				Converged:     converged,
+				ResourceWaits: waits,
+				Contract:      contract,
+			}, err
 		}
 		if status == "converged" {
 			if DebugEnabled() && attempt > 1 && attempt < maxAttempts {
@@ -311,10 +364,29 @@ func pollAwait(contract scan.Contract, timeout, interval time.Duration, cmdCfg a
 					logger.logLine(formatted)
 				}
 			}
-			return awaitPollResult{Status: "converged", Message: message, ExitCode: 0, Pending: 0, Converged: converged, ResourceWaits: waits, Contract: contract}, nil
+			return awaitPollResult{
+				Status:        "converged",
+				Message:       message,
+				ExitCode:      0,
+				Pending:       0,
+				Converged:     converged,
+				ResourceWaits: waits,
+				Contract:      contract,
+			}, nil
 		}
 		if status == "failed" {
-			return awaitPollResult{Status: "failed", Message: message, ExitCode: codeGenericFailure, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, &ExitCodeError{Code: codeGenericFailure, Message: message}
+			return awaitPollResult{
+				Status:        "failed",
+				Message:       message,
+				ExitCode:      codeGenericFailure,
+				Pending:       pending,
+				Converged:     converged,
+				ResourceWaits: waits,
+				Contract:      contract,
+			}, &ExitCodeError{
+				Code:    codeGenericFailure,
+				Message: message,
+			}
 		}
 		if DebugEnabled() {
 			if formatted := renderDebugTemplate(map[string]any{
@@ -329,28 +401,75 @@ func pollAwait(contract scan.Contract, timeout, interval time.Duration, cmdCfg a
 		}
 		if timeout > 0 && time.Since(start) >= timeout {
 			fmt.Fprintf(os.Stderr, "timeout reached after %s\n", time.Since(start).Round(time.Second))
-			return awaitPollResult{Status: "timeout", Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending), ExitCode: codeTimeout, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, &ExitCodeError{Code: codeTimeout, Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending)}
+			return awaitPollResult{
+				Status:        "timeout",
+				Message:       fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
+				ExitCode:      codeTimeout,
+				Pending:       pending,
+				Converged:     converged,
+				ResourceWaits: waits,
+				Contract:      contract,
+			}, &ExitCodeError{
+				Code:    codeTimeout,
+				Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
+			}
 		}
 		if timeout > 0 && attempt >= maxAttempts {
 			time.Sleep(interval)
 			if elapsed := time.Since(start); elapsed >= timeout {
 				fmt.Fprintf(os.Stderr, "timeout reached after %s\n", elapsed.Round(time.Second))
-				return awaitPollResult{Status: "timeout", Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending), ExitCode: codeTimeout, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, &ExitCodeError{Code: codeTimeout, Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending)}
+				return awaitPollResult{
+					Status:        "timeout",
+					Message:       fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
+					ExitCode:      codeTimeout,
+					Pending:       pending,
+					Converged:     converged,
+					ResourceWaits: waits,
+					Contract:      contract,
+				}, &ExitCodeError{
+					Code:    codeTimeout,
+					Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
+				}
 			}
 			continue
 		}
 		if attempt >= maxAttempts {
-			return awaitPollResult{Status: "pending", Message: fmt.Sprintf("%d resource(s) remain pending", pending), ExitCode: codeGenericFailure, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, &ExitCodeError{Code: codeGenericFailure, Message: fmt.Sprintf("%d resource(s) remain pending", pending)}
+			return awaitPollResult{
+				Status:        "pending",
+				Message:       fmt.Sprintf("%d resource(s) remain pending", pending),
+				ExitCode:      codeGenericFailure,
+				Pending:       pending,
+				Converged:     converged,
+				ResourceWaits: waits,
+				Contract:      contract,
+			}, &ExitCodeError{
+				Code:    codeGenericFailure,
+				Message: fmt.Sprintf("%d resource(s) remain pending", pending),
+			}
 		}
 		time.Sleep(interval)
 		if timeout > 0 && time.Since(start) >= timeout {
 			fmt.Fprintf(os.Stderr, "timeout reached after %s\n", time.Since(start).Round(time.Second))
-			return awaitPollResult{Status: "timeout", Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending), ExitCode: codeTimeout, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, &ExitCodeError{Code: codeTimeout, Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending)}
+			return awaitPollResult{
+				Status:        "timeout",
+				Message:       fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
+				ExitCode:      codeTimeout,
+				Pending:       pending,
+				Converged:     converged,
+				ResourceWaits: waits,
+				Contract:      contract,
+			}, &ExitCodeError{
+				Code:    codeTimeout,
+				Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
+			}
 		}
 	}
 }
 
-func awsContractState(contract scan.Contract, cfg awscmd.Config) (pending int, converged int, status string, message string, waits []awaitResourceWait, err error) {
+func awsContractState(
+	contract scan.Contract,
+	cfg awscmd.Config,
+) (pending, converged int, status, message string, waits []awaitResourceWait, err error) {
 	pending = 0
 	converged = 0
 	var mu sync.Mutex
@@ -370,10 +489,16 @@ func awsContractState(contract scan.Contract, cfg awscmd.Config) (pending int, c
 				contract.Resources[idx].Observation.ARN = arn
 			}
 			if runtimeErr != nil {
-				waits = append(waits, awaitResourceWait{Address: item.Address, Name: item.Name, Status: "failed", Wait: elapsed})
+				waits = append(
+					waits,
+					awaitResourceWait{Address: item.Address, Name: item.Name, Status: "failed", Wait: elapsed},
+				)
 				return
 			}
-			waits = append(waits, awaitResourceWait{Address: item.Address, Name: item.Name, Status: observed, Wait: elapsed})
+			waits = append(
+				waits,
+				awaitResourceWait{Address: item.Address, Name: item.Name, Status: observed, Wait: elapsed},
+			)
 			if observed == "converged" {
 				converged++
 				return
@@ -441,7 +566,7 @@ func countRuntimeErrors(waits []awaitResourceWait) int {
 	return count
 }
 
-func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status string, arn string, err error) {
+func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status, arn string, err error) {
 	if item.Observation.Strategy == "" {
 		if item.Status == "" || !strings.EqualFold(strings.TrimSpace(item.Status), "converged") {
 			return "pending", "", nil
@@ -762,7 +887,14 @@ func contractReportPath(contractPath string) string {
 	return filepath.Join(filepath.Dir(contractPath), stem+".convergence-report.json")
 }
 
-func writeAwaitReport(contractPath string, contract scan.Contract, status string, force bool, waits []awaitResourceWait, times ...time.Time) error {
+func writeAwaitReport(
+	contractPath string,
+	contract scan.Contract,
+	status string,
+	force bool,
+	waits []awaitResourceWait,
+	times ...time.Time,
+) error {
 	updated := withObservationMetadata(contract, waits, status)
 	message := fmt.Sprintf("%d resource(s) remain pending", expectedPendingResources(updated))
 	if strings.EqualFold(strings.TrimSpace(status), "converged") {

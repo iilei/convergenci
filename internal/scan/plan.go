@@ -92,7 +92,12 @@ func LoadPlan(path string) (TerraformPlan, error) {
 }
 
 // BuildContract converts a Terraform plan into a convergence contract using the provided policy.
-func BuildContract(plan TerraformPlan, policy RecordPolicy, addressRegex string, extraIndicators []string) (Contract, error) {
+func BuildContract(
+	plan TerraformPlan,
+	policy RecordPolicy,
+	addressRegex string,
+	extraIndicators []string,
+) (Contract, error) {
 	if addressRegex == "" {
 		addressRegex = policy.DefaultRegex
 	}

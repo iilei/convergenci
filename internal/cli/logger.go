@@ -105,7 +105,9 @@ func ConfigureDebugFormat(raw string) error {
 	}
 	logger.format = tpl
 	logger.rawFormat = raw
-	logger.prefixMode = strings.Contains(raw, ".Level") || strings.Contains(raw, ".Timestamp") || strings.Contains(raw, ".Prefix") || strings.Contains(raw, ".Time")
+	logger.prefixMode = strings.Contains(raw, ".Level") || strings.Contains(raw, ".Timestamp") ||
+		strings.Contains(raw, ".Prefix") ||
+		strings.Contains(raw, ".Time")
 	return nil
 }
 

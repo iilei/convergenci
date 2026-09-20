@@ -27,7 +27,7 @@ func DefaultConfig() Config {
 }
 
 // RegisterFlags adds the shared AWS CLI flags and returns the configured values.
-func RegisterFlags(fs *flag.FlagSet) (binaryPath *string, profileName *string) {
+func RegisterFlags(fs *flag.FlagSet) (binaryPath, profileName *string) {
 	binaryPath = fs.String("aws-cli-path", "aws", "path to the AWS CLI binary")
 	profileName = fs.String("aws-profile-name", "", "AWS profile name to use for AWS CLI calls")
 	return binaryPath, profileName
