@@ -49,11 +49,13 @@ func (c *Command) initFlagSet() {
 		fmt.Fprintf(c.out, "  version        Show version information\n")
 		fmt.Fprintf(c.out, "  scan           Scan a Terraform plan and emit a convergence contract\n")
 		fmt.Fprintf(c.out, "  await          Wait for the runtime state in a convergence contract to converge\n")
+		fmt.Fprintf(c.out, "  report         Render a convergence report file as human-readable text\n")
 		fmt.Fprintf(c.out, "  doctor         Check AWS CLI availability and render a human-friendly report\n\n")
 		fmt.Fprintf(c.out, "Examples:\n")
 		fmt.Fprintf(c.out, "  convergenci scan <tfplan.json>\n")
 		fmt.Fprintf(c.out, "  convergenci scan --assert-all-settled <tfplan.json>\n")
 		fmt.Fprintf(c.out, "  convergenci await <convergence.json>\n")
+		fmt.Fprintf(c.out, "  convergenci report <convergence-report.json>\n")
 		fmt.Fprintf(c.out, "  convergenci doctor ./artifacts/report.json\n\n")
 		fmt.Fprintf(c.out, "Flags:\n")
 		fmt.Fprintf(c.out, "  -v, --version  Show version information and exit\n")
@@ -148,6 +150,8 @@ func (c *Command) ExecuteArgs(args []string) error {
 		return c.executeScan(args[1:])
 	case "await":
 		return c.executeAwait(args[1:])
+	case "report":
+		return c.executeReport(args[1:])
 	case "doctor":
 		return c.executeDoctor(args[1:])
 	}

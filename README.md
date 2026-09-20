@@ -138,6 +138,28 @@ convergenci await --timeout 10m --interval 15s ./artifacts/asg-plan.convergence.
 convergenci await --force ./artifacts/asg-plan.convergence.json
 ```
 
+#### `report`
+
+Render a convergence report file (produced by `await`) as human-readable text.
+
+```bash
+convergenci report <convergence-report.json>
+```
+
+Behavior:
+
+- uses the built-in `templates/report-as-text.tmpl` template, embedded into the
+  binary at build time, so no external template file or `gomplate` install is
+  required
+- reads the JSON report given as a positional argument and prints the
+  rendered text to stdout
+
+Example:
+
+```bash
+convergenci report ./artifacts/asg-plan.convergence-report.json
+```
+
 ## Debug logging
 
 Debug logging is controlled by the global `DEBUG` environment variable and the `--debug` flag.
