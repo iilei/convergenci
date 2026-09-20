@@ -6,10 +6,51 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sort"
+	"strings"
 	"text/template"
 
 	"github.com/iilei/convergenci-cli/templates"
 )
+
+// colorEnabled reports whether ANSI color codes should be emitted in report output.
+// CONVERGENCI_COLOR=always/true forces color on and never/false forces it off; otherwise
+// color is enabled only when NO_COLOR (https://no-color.org) is unset and stdout is an
+// interactive terminal, so piped or redirected output (files, CI logs) stays plain by default.
+func colorEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("CONVERGENCI_COLOR"))) {
+	case "always", "true":
+		return true
+	case "never", "false":
+		return false
+	}
+	if strings.TrimSpace(os.Getenv("NO_COLOR")) != "" {
+		return false
+	}
+	info, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
+}
+
+const (
+	ansiReset   = "\033[0m"
+	ansiBold    = "\033[1m"
+	ansiRed     = "\033[31m"
+	ansiGreen   = "\033[32m"
+	ansiYellow  = "\033[33m"
+	ansiCyan    = "\033[36m"
+	ansiMagenta = "\033[35m"
+)
+
+// colorize wraps text in the given ANSI code, unless color output is disabled.
+func colorize(code, text string) string {
+	if !colorEnabled() || text == "" {
+		return text
+	}
+	return code + text + ansiReset
+}
 
 // reportTemplateFuncs provides the small subset of gomplate-style helpers used by the
 // built-in report template, so it can be rendered with the standard library alone.
@@ -36,7 +77,64 @@ func reportTemplateFuncs(report map[string]any) template.FuncMap {
 			}
 			return result
 		},
+		"red":    func(text string) string { return colorize(ansiRed, text) },
+		"green":  func(text string) string { return colorize(ansiGreen, text) },
+		"yellow": func(text string) string { return colorize(ansiYellow, text) },
+		"cyan":   func(text string) string { return colorize(ansiCyan, text) },
+		"bold":   func(text string) string { return colorize(ansiBold, text) },
+		"statusColor": func(status string) string {
+			switch strings.ToLower(strings.TrimSpace(status)) {
+			case "converged", "successful":
+				return colorize(ansiGreen, status)
+			case "pending":
+				return colorize(ansiYellow, status)
+			case "failed", "timeout":
+				return colorize(ansiRed, status)
+			case "inprogress", "in-progress", "in_progress":
+				return colorize(ansiCyan, status)
+			case "unknown":
+				return colorize(ansiMagenta, status)
+			default:
+				return status
+			}
+		},
+		"statusBullet": func(status string) string {
+			if isSuccessStatus(status) {
+				return "*"
+			}
+			return "-"
+		},
+		"sortResources": sortResources,
 	}
+}
+
+// isSuccessStatus reports whether a resource/report status counts as successful.
+func isSuccessStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "converged", "successful":
+		return true
+	default:
+		return false
+	}
+}
+
+// sortResources orders report resources with successful ones first, each group
+// alphabetized by address, so the rendered report groups converged resources
+// together ahead of resources that still need attention.
+func sortResources(resources []any) []any {
+	sorted := make([]any, len(resources))
+	copy(sorted, resources)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		left, _ := sorted[i].(map[string]any)
+		right, _ := sorted[j].(map[string]any)
+		leftSuccess := isSuccessStatus(fmt.Sprintf("%v", left["status"]))
+		rightSuccess := isSuccessStatus(fmt.Sprintf("%v", right["status"]))
+		if leftSuccess != rightSuccess {
+			return leftSuccess
+		}
+		return fmt.Sprintf("%v", left["address"]) < fmt.Sprintf("%v", right["address"])
+	})
+	return sorted
 }
 
 func isEmptyValue(val any) bool {

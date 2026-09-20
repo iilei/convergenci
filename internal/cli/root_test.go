@@ -464,6 +464,36 @@ func TestWithObservationFulfilledPreservesMixedResourceState(t *testing.T) {
 	}
 }
 
+func TestWithObservationMetadataUsesPerResourceWaitsOnTimeout(t *testing.T) {
+	contract := scan.Contract{Resources: []scan.ContractItem{
+		{Address: "asg.a", Observation: scan.Observation{Strategy: "instance_refresh"}},
+		{Address: "asg.b", Observation: scan.Observation{Strategy: "instance_refresh"}},
+		{Address: "asg.c", Observation: scan.Observation{Strategy: "instance_refresh"}},
+	}}
+	waits := []awaitResourceWait{
+		{Address: "asg.a", Status: "converged"},
+		{Address: "asg.b", Status: "pending"},
+		{Address: "asg.c", Status: "failed"},
+	}
+
+	updated := withObservationMetadata(contract, waits, "timeout")
+	if updated.Resources[0].Status != "converged" {
+		t.Fatalf("asg.a status = %q, want converged", updated.Resources[0].Status)
+	}
+	if updated.Resources[0].Observation.Fulfilled == nil || !*updated.Resources[0].Observation.Fulfilled {
+		t.Fatalf("asg.a fulfilled = %v, want true", updated.Resources[0].Observation.Fulfilled)
+	}
+	if updated.Resources[1].Status != "pending" {
+		t.Fatalf("asg.b status = %q, want pending", updated.Resources[1].Status)
+	}
+	if updated.Resources[2].Status != "pending" {
+		t.Fatalf("asg.c status = %q, want pending", updated.Resources[2].Status)
+	}
+	if updated.Resources[2].Observation.Fulfilled == nil || *updated.Resources[2].Observation.Fulfilled {
+		t.Fatalf("asg.c fulfilled = %v, want false", updated.Resources[2].Observation.Fulfilled)
+	}
+}
+
 func TestAwaitTimeoutReportsToStderr(t *testing.T) {
 	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", DesiredGeneration: []scan.GenerationRequirement{{Type: "tag", Key: "rotation", Value: "v2"}}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
 	t.Setenv("FAKE_AWS_SCENARIO", "in-progress")

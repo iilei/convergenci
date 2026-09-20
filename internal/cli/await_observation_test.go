@@ -72,6 +72,129 @@ func TestObserveAWSResourceFakeScenarios(t *testing.T) {
 	}
 }
 
+func TestDesiredGenerationUnmet(t *testing.T) {
+	group := autoScalingGroupObservation{
+		Tags: []awsTag{{Key: "rotation", Value: "green"}},
+		LaunchTemplate: &struct {
+			Version string `json:"Version"`
+		}{Version: "4"},
+	}
+
+	tests := []struct {
+		name string
+		item scan.ContractItem
+		want bool
+	}{
+		{
+			name: "matching tag and launch template",
+			item: scan.ContractItem{DesiredGeneration: []scan.GenerationRequirement{
+				{Type: "tag", Key: "rotation", Value: "green"},
+				{Type: "launch_template", Value: "4"},
+			}},
+			want: false,
+		},
+		{
+			name: "mismatched tag",
+			item: scan.ContractItem{DesiredGeneration: []scan.GenerationRequirement{
+				{Type: "tag", Key: "rotation", Value: "blue"},
+			}},
+			want: true,
+		},
+		{
+			name: "mismatched launch template version",
+			item: scan.ContractItem{DesiredGeneration: []scan.GenerationRequirement{
+				{Type: "launch_template", Value: "5"},
+			}},
+			want: true,
+		},
+		{
+			name: "unverifiable tag grants grace period",
+			item: scan.ContractItem{DesiredGeneration: []scan.GenerationRequirement{
+				{Type: "tag", Key: "missing-tag", Value: "green"},
+			}},
+			want: false,
+		},
+		{
+			name: "unknown requirement type is trusted",
+			item: scan.ContractItem{DesiredGeneration: []scan.GenerationRequirement{
+				{Type: "indicator", Key: "custom", Value: "anything"},
+			}},
+			want: false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := desiredGenerationUnmet(test.item, group); got != test.want {
+				t.Fatalf("desiredGenerationUnmet() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
+func TestObserveAWSResourceGrantsGracePeriodUntilTagMatches(t *testing.T) {
+	awsPath := filepath.Join(t.TempDir(), "aws")
+	stub := `#!/bin/sh
+if [ "$2" = "describe-instance-refreshes" ]; then
+    printf '%s\n' '{"InstanceRefreshes":[]}'
+    exit 0
+fi
+printf '%s\n' "$FAKE_AWS_GROUP_RESPONSE"
+`
+	if err := os.WriteFile(awsPath, []byte(stub), 0o755); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	item := scan.ContractItem{
+		Address: "aws_autoscaling_group.example",
+		Name:    "example-asg",
+		DesiredGeneration: []scan.GenerationRequirement{
+			{Type: "tag", Key: "rotation", Value: "green"},
+		},
+		Observation: scan.Observation{Strategy: "instance_refresh"},
+	}
+	cfg := awscmd.Config{BinaryPath: awsPath}
+
+	t.Setenv("FAKE_AWS_GROUP_RESPONSE", `{"AutoScalingGroups":[{"AutoScalingGroupARN":"arn:example","Tags":[{"Key":"rotation","Value":"blue"}],"Activities":[{"StatusCode":"Successful","Progress":100}],"Instances":[{"LifecycleState":"InService"}]}]}`)
+	status, _, err := observeAWSResource(item, cfg)
+	if err != nil {
+		t.Fatalf("observeAWSResource returned error: %v", err)
+	}
+	if status != "pending" {
+		t.Fatalf("status = %q, want pending while rotation tag has not rolled over", status)
+	}
+
+	SetDebug(true)
+	t.Cleanup(func() { SetDebug(false) })
+	if err := ConfigureDebugFormat("{{ .Event }} {{ .RequirementType }} {{ .RequirementKey }} value={{ .Wanted }}"); err != nil {
+		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
+	}
+	oldStderr := os.Stderr
+	readPipe, writePipe, pipeErr := os.Pipe()
+	if pipeErr != nil {
+		t.Fatalf("os.Pipe returned error: %v", pipeErr)
+	}
+	os.Stderr = writePipe
+
+	t.Setenv("FAKE_AWS_GROUP_RESPONSE", `{"AutoScalingGroups":[{"AutoScalingGroupARN":"arn:example","Tags":[{"Key":"rotation","Value":"green"}],"Activities":[{"StatusCode":"Successful","Progress":100}],"Instances":[{"LifecycleState":"InService"}]}]}`)
+	status, _, err = observeAWSResource(item, cfg)
+	_ = writePipe.Close()
+	os.Stderr = oldStderr
+	output, readErr := io.ReadAll(readPipe)
+	_ = readPipe.Close()
+	if readErr != nil {
+		t.Fatalf("io.ReadAll returned error: %v", readErr)
+	}
+	if err != nil {
+		t.Fatalf("observeAWSResource returned error: %v", err)
+	}
+	if status != "converged" {
+		t.Fatalf("status = %q, want converged once rotation tag matches", status)
+	}
+	if !strings.Contains(string(output), "desired_generation_met tag rotation value=green") {
+		t.Fatalf("debug output = %q, want desired_generation_met event once tag matches", output)
+	}
+}
+
 func TestObserveAWSResourceFallsBackToContractStatusOnAWSFailure(t *testing.T) {
 	item := scan.ContractItem{
 		Address: "aws_autoscaling_group.example",

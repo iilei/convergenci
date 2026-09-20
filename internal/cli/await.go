@@ -510,18 +510,7 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status strin
 		return "converged", "", nil
 	}
 	var payload struct {
-		AutoScalingGroups []struct {
-			AutoScalingGroupName string `json:"AutoScalingGroupName"`
-			AutoScalingGroupARN  string `json:"AutoScalingGroupARN"`
-			Activities           []struct {
-				Cause      string `json:"Cause"`
-				StatusCode string `json:"StatusCode"`
-				Progress   int    `json:"Progress"`
-			} `json:"Activities"`
-			Instances []struct {
-				LifecycleState string `json:"LifecycleState"`
-			} `json:"Instances"`
-		} `json:"AutoScalingGroups"`
+		AutoScalingGroups []autoScalingGroupObservation `json:"AutoScalingGroups"`
 	}
 	if err := json.Unmarshal(resp, &payload); err != nil {
 		return "", "", err
@@ -552,7 +541,7 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status strin
 	for _, activity := range group.Activities {
 		switch strings.ToUpper(activity.StatusCode) {
 		case "SUCCESSFUL":
-			return "converged", arn, nil
+			return finalizeGroupStatus(item, group, "converged"), arn, nil
 		case "FAILED":
 			return "failed", arn, nil
 		case "INPROGRESS":
@@ -566,9 +555,154 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status strin
 		return "pending", arn, nil
 	}
 	if refreshStatus != "" {
-		return refreshStatus, arn, nil
+		return finalizeGroupStatus(item, group, refreshStatus), arn, nil
 	}
-	return "converged", arn, nil
+	return finalizeGroupStatus(item, group, "converged"), arn, nil
+}
+
+// autoScalingGroupObservation is the subset of the AWS describe-auto-scaling-groups response
+// used to observe convergence, including the runtime data needed to verify desired generation
+// requirements (tags, launch template version) against the convergence contract.
+type autoScalingGroupObservation struct {
+	AutoScalingGroupName string   `json:"AutoScalingGroupName"`
+	AutoScalingGroupARN  string   `json:"AutoScalingGroupARN"`
+	Tags                 []awsTag `json:"Tags"`
+	LaunchTemplate       *struct {
+		Version string `json:"Version"`
+	} `json:"LaunchTemplate"`
+	MixedInstancesPolicy *struct {
+		LaunchTemplate struct {
+			LaunchTemplateSpecification struct {
+				Version string `json:"Version"`
+			} `json:"LaunchTemplateSpecification"`
+		} `json:"LaunchTemplate"`
+	} `json:"MixedInstancesPolicy"`
+	Activities []struct {
+		Cause      string `json:"Cause"`
+		StatusCode string `json:"StatusCode"`
+		Progress   int    `json:"Progress"`
+	} `json:"Activities"`
+	Instances []struct {
+		LifecycleState string `json:"LifecycleState"`
+	} `json:"Instances"`
+}
+
+type awsTag struct {
+	Key   string `json:"Key"`
+	Value string `json:"Value"`
+}
+
+// finalizeGroupStatus downgrades a candidate "converged" status to "pending" when a desired
+// generation requirement is verifiably not yet applied, giving AWS a grace period to reflect
+// an in-flight rollover rather than reporting premature or false convergence.
+func finalizeGroupStatus(item scan.ContractItem, group autoScalingGroupObservation, status string) string {
+	if status == "converged" && desiredGenerationUnmet(item, group) {
+		return "pending"
+	}
+	return status
+}
+
+// desiredGenerationUnmet reports whether a desired generation requirement can be verified
+// against the observed ASG and does not yet match. Requirements we cannot verify (e.g. the
+// runtime response omits tags or launch template data) are treated as satisfied, granting a
+// grace period for AWS to reflect the rollover before it is treated as pending.
+func desiredGenerationUnmet(item scan.ContractItem, group autoScalingGroupObservation) bool {
+	unmet := false
+	for _, requirement := range item.DesiredGeneration {
+		want := fmt.Sprintf("%v", requirement.Value)
+		switch requirement.Type {
+		case "tag":
+			value, ok := groupTagValue(group.Tags, requirement.Key)
+			if !ok {
+				continue
+			}
+			if value != want {
+				logDesiredGenerationPending(item, requirement.Type, requirement.Key, want, value)
+				unmet = true
+			} else {
+				logDesiredGenerationMet(item, requirement.Type, requirement.Key, want)
+			}
+		case "launch_template":
+			value, ok := groupLaunchTemplateVersion(group)
+			if !ok {
+				continue
+			}
+			if value != want {
+				logDesiredGenerationPending(item, requirement.Type, requirement.Key, want, value)
+				unmet = true
+			} else {
+				logDesiredGenerationMet(item, requirement.Type, requirement.Key, want)
+			}
+		}
+	}
+	return unmet
+}
+
+// logDesiredGenerationPending makes the otherwise-invisible grace-period wait for a specific
+// desired generation requirement (e.g. a tag rollover) explicit in debug output.
+func logDesiredGenerationPending(item scan.ContractItem, requirementType, key, wanted, actual string) {
+	if !DebugEnabled() {
+		return
+	}
+	name := item.Name
+	if name == "" {
+		name = item.Address
+	}
+	if formatted := renderDebugTemplate(map[string]any{
+		"Event":           "desired_generation_pending",
+		"Source":          "desired_generation",
+		"Resource":        name,
+		"RequirementType": requirementType,
+		"RequirementKey":  key,
+		"Wanted":          wanted,
+		"Actual":          actual,
+	}); formatted != "" {
+		logger.logLine(formatted)
+	}
+}
+
+// logDesiredGenerationMet makes a verified, matching desired generation requirement (e.g. a
+// completed tag rollover) explicit in debug output, symmetric to logDesiredGenerationPending.
+func logDesiredGenerationMet(item scan.ContractItem, requirementType, key, value string) {
+	if !DebugEnabled() {
+		return
+	}
+	name := item.Name
+	if name == "" {
+		name = item.Address
+	}
+	if formatted := renderDebugTemplate(map[string]any{
+		"Event":           "desired_generation_met",
+		"Source":          "desired_generation",
+		"Resource":        name,
+		"RequirementType": requirementType,
+		"RequirementKey":  key,
+		"Wanted":          value,
+		"Actual":          value,
+	}); formatted != "" {
+		logger.logLine(formatted)
+	}
+}
+
+func groupTagValue(tags []awsTag, key string) (string, bool) {
+	for _, tag := range tags {
+		if tag.Key == key {
+			return tag.Value, true
+		}
+	}
+	return "", false
+}
+
+func groupLaunchTemplateVersion(group autoScalingGroupObservation) (string, bool) {
+	if group.LaunchTemplate != nil && group.LaunchTemplate.Version != "" {
+		return group.LaunchTemplate.Version, true
+	}
+	if group.MixedInstancesPolicy != nil {
+		if version := group.MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification.Version; version != "" {
+			return version, true
+		}
+	}
+	return "", false
 }
 
 func expectedPendingResources(contract scan.Contract) int {
@@ -662,6 +796,10 @@ func writeAwaitReport(contractPath string, contract scan.Contract, status string
 
 func withObservationMetadata(contract scan.Contract, waits []awaitResourceWait, status string) scan.Contract {
 	updated := contract
+	waitStatusByAddress := make(map[string]string, len(waits))
+	for _, wait := range waits {
+		waitStatusByAddress[wait.Address] = wait.Status
+	}
 	for i := range updated.Resources {
 		if updated.Resources[i].Observation.Fulfilled != nil {
 			if *updated.Resources[i].Observation.Fulfilled {
@@ -669,7 +807,25 @@ func withObservationMetadata(contract scan.Contract, waits []awaitResourceWait, 
 			} else {
 				updated.Resources[i].Status = "pending"
 			}
-		} else if strings.EqualFold(status, "converged") {
+			continue
+		}
+		if waitStatus, ok := waitStatusByAddress[updated.Resources[i].Address]; ok {
+			switch waitStatus {
+			case "converged":
+				value := true
+				updated.Resources[i].Status = "converged"
+				updated.Resources[i].Observation.Fulfilled = &value
+			case "failed":
+				value := false
+				updated.Resources[i].Status = "pending"
+				updated.Resources[i].Observation.Fulfilled = &value
+			default:
+				updated.Resources[i].Status = "pending"
+				updated.Resources[i].Observation.Fulfilled = nil
+			}
+			continue
+		}
+		if strings.EqualFold(status, "converged") {
 			value := true
 			updated.Resources[i].Status = "converged"
 			updated.Resources[i].Observation.Fulfilled = &value

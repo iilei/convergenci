@@ -18,6 +18,10 @@ const defaultDebugFormat = `[{{ .Level }} {{ .Timestamp }}]{{- " " -}}
     === {{ .Event }} {{ .RetryIteration }}/{{ .RetryLimit }} resources={{ join ", " .ResourceNames }} converged={{ join ", " .ConvergedResources }} elapsed={{ .Elapsed }} ===
 {{- else if eq .Event "retry" -}}
 	retry={{ .RetryIteration }}/{{ .RetryLimit }} pending={{ join ", " .PendingResources }} elapsed={{- .Elapsed }}
+{{- else if eq .Event "desired_generation_pending" -}}
+    >>> waiting for {{ .RequirementType }} {{ .RequirementKey }} on {{ .Resource }}: want={{ .Wanted }} actual={{ .Actual }} <<<
+{{- else if eq .Event "desired_generation_met" -}}
+    +++ {{ .RequirementType }} {{ .RequirementKey }} on {{ .Resource }} satisfied: value={{ .Wanted }} +++
 {{- else -}}
     source={{ .Source }} resource={{ .Resource }} status={{ .Status }} pct={{ .PercentageComplete }}
 {{- end -}}`

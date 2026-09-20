@@ -40,6 +40,10 @@ func scenarioName(scenario string) string {
 		return "late-success"
 	case "complex-report":
 		return "complex-report"
+	case "tag-rotation-lagging":
+		return "tag-rotation-lagging"
+	case "mixed-resource-outcomes":
+		return "mixed-resource-outcomes"
 	default:
 		return "success"
 	}
@@ -194,6 +198,59 @@ func fakeASGARN(name string) string {
 	return fmt.Sprintf("arn:aws:autoscaling:us-east-1:123456789012:autoScalingGroup:::%s", name)
 }
 
+// mixedMovementResourceIsPending picks a single resource (by ASG name suffix) to remain
+// pending indefinitely, so a single await run's report shows both pending and success
+// resources at once, without relying on retries or timing.
+func mixedMovementResourceIsPending(asgName string) bool {
+	return strings.HasSuffix(asgName, "-1")
+}
+
+func mixedResourceOutcomeTag(asgName string) string {
+	if mixedMovementResourceIsPending(asgName) {
+		return "blue"
+	}
+	return "green"
+}
+
+func mixedResourceOutcomeActivity(asgName string) string {
+	if mixedMovementResourceIsPending(asgName) {
+		return "InProgress"
+	}
+	return "Successful"
+}
+
+func mixedResourceOutcomeRefreshStatus(asgName string) string {
+	if mixedMovementResourceIsPending(asgName) {
+		return "InProgress"
+	}
+	return "Successful"
+}
+
+func mixedResourceOutcomeProgress(asgName string) int {
+	if mixedMovementResourceIsPending(asgName) {
+		return 40
+	}
+	return 100
+}
+
+func mixedResourceOutcomeInstance(asgName string) map[string]any {
+	if mixedMovementResourceIsPending(asgName) {
+		return map[string]any{"LifecycleState": "Pending", "HealthStatus": "Healthy", "InstanceId": "i-mixed"}
+	}
+	return map[string]any{"LifecycleState": "InService", "HealthStatus": "Healthy", "InstanceId": "i-mixed"}
+}
+
+// laggingTagValue simulates AWS not yet reflecting a tag rollover: it returns the stale
+// value for the first threshold-1 calls, then the rotated value, to exercise the
+// desired-generation grace period against a real race condition rather than only status.
+func laggingTagValue(scenario, stale, rotated string, threshold int) string {
+	count := incrementScenarioCount(scenario)
+	if count < threshold {
+		return stale
+	}
+	return rotated
+}
+
 func applyFakeAWSDelay() {
 	delay, err := time.ParseDuration(strings.TrimSpace(os.Getenv("FAKE_AWS_DELAY")))
 	if err == nil && delay > 0 {
@@ -240,6 +297,46 @@ func main() {
 		asgName := requestedASGName(rest)
 		switch subcommand {
 		case "describe-auto-scaling-groups":
+			if scenario == "mixed-resource-outcomes" {
+				response := map[string]any{
+					"AutoScalingGroups": []map[string]any{{
+						"AutoScalingGroupName": asgName,
+						"AutoScalingGroupARN":  fakeASGARN(asgName),
+						"Tags": []map[string]any{
+							{"Key": "rotation", "Value": mixedResourceOutcomeTag(asgName)},
+						},
+						"Instances": []map[string]any{
+							mixedResourceOutcomeInstance(asgName),
+						},
+						"Activities": []map[string]any{{"Cause": "None", "StatusCode": mixedResourceOutcomeActivity(asgName), "Progress": mixedResourceOutcomeProgress(asgName)}},
+					}},
+				}
+				if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					os.Exit(3)
+				}
+				return
+			}
+			if scenario == "tag-rotation-lagging" {
+				response := map[string]any{
+					"AutoScalingGroups": []map[string]any{{
+						"AutoScalingGroupName": asgName,
+						"AutoScalingGroupARN":  fakeASGARN(asgName),
+						"Tags": []map[string]any{
+							{"Key": "rotation", "Value": laggingTagValue(scenario, "v1", "v2", 3)},
+						},
+						"Instances": []map[string]any{
+							{"LifecycleState": "InService", "HealthStatus": "Healthy", "InstanceId": "i-1234567890"},
+						},
+						"Activities": []map[string]any{{"Cause": "None", "StatusCode": "Successful", "Progress": 100}},
+					}},
+				}
+				if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					os.Exit(3)
+				}
+				return
+			}
 			if scenario == "complex-report" {
 				response := map[string]any{"AutoScalingGroups": complexReportAutoscalingGroups()}
 				if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
@@ -298,6 +395,38 @@ func main() {
 			}
 			return
 		case "describe-instance-refreshes":
+			if scenario == "mixed-resource-outcomes" {
+				response := map[string]any{
+					"InstanceRefreshes": []map[string]any{{
+						"AutoScalingGroupName": asgName,
+						"InstanceRefreshId":    "ir-mixed",
+						"Status":               mixedResourceOutcomeRefreshStatus(asgName),
+						"PercentageComplete":   mixedResourceOutcomeProgress(asgName),
+						"CompletedAt":          "2026-09-20T00:00:00Z",
+					}},
+				}
+				if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					os.Exit(3)
+				}
+				return
+			}
+			if scenario == "tag-rotation-lagging" {
+				response := map[string]any{
+					"InstanceRefreshes": []map[string]any{{
+						"AutoScalingGroupName": asgName,
+						"InstanceRefreshId":    "ir-tag-rotation",
+						"Status":               "Successful",
+						"PercentageComplete":   100,
+						"CompletedAt":          "2026-09-20T00:00:00Z",
+					}},
+				}
+				if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					os.Exit(3)
+				}
+				return
+			}
 			if scenario == "complex-report" {
 				response := map[string]any{
 					"InstanceRefreshes": []map[string]any{

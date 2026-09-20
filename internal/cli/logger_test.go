@@ -169,6 +169,90 @@ func TestConfigureDebugFormatRendersObservationFields(t *testing.T) {
 	}
 }
 
+func TestConfigureDebugFormatRendersDesiredGenerationPendingFields(t *testing.T) {
+	SetDebug(true)
+	defer SetDebug(false)
+
+	if err := ConfigureDebugFormat("{{ .Event }} {{ .Resource }} {{ .RequirementType }} {{ .RequirementKey }} want={{ .Wanted }} actual={{ .Actual }}"); err != nil {
+		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
+	}
+
+	got := renderDebugTemplate(map[string]any{
+		"Event":           "desired_generation_pending",
+		"Resource":        "worker-asg",
+		"RequirementType": "tag",
+		"RequirementKey":  "rotation",
+		"Wanted":          "v2",
+		"Actual":          "v1",
+	})
+	if got != "desired_generation_pending worker-asg tag rotation want=v2 actual=v1" {
+		t.Fatalf("renderDebugTemplate = %q, want desired generation pending fields", got)
+	}
+}
+
+func TestDefaultDebugFormatRendersDesiredGenerationPendingProminently(t *testing.T) {
+	SetDebug(true)
+	defer SetDebug(false)
+
+	if err := ConfigureDebugFormat(defaultDebugFormat); err != nil {
+		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
+	}
+
+	got := renderDebugTemplate(map[string]any{
+		"Event":           "desired_generation_pending",
+		"Resource":        "worker-asg",
+		"RequirementType": "tag",
+		"RequirementKey":  "rotation",
+		"Wanted":          "v2",
+		"Actual":          "v1",
+	})
+	if !strings.Contains(got, "waiting for tag rotation on worker-asg") || !strings.Contains(got, "want=v2") || !strings.Contains(got, "actual=v1") {
+		t.Fatalf("renderDebugTemplate = %q, want prominent desired generation wait message", got)
+	}
+}
+
+func TestConfigureDebugFormatRendersDesiredGenerationMetFields(t *testing.T) {
+	SetDebug(true)
+	defer SetDebug(false)
+
+	if err := ConfigureDebugFormat("{{ .Event }} {{ .Resource }} {{ .RequirementType }} {{ .RequirementKey }} value={{ .Wanted }}"); err != nil {
+		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
+	}
+
+	got := renderDebugTemplate(map[string]any{
+		"Event":           "desired_generation_met",
+		"Resource":        "worker-asg",
+		"RequirementType": "tag",
+		"RequirementKey":  "rotation",
+		"Wanted":          "v2",
+		"Actual":          "v2",
+	})
+	if got != "desired_generation_met worker-asg tag rotation value=v2" {
+		t.Fatalf("renderDebugTemplate = %q, want desired generation met fields", got)
+	}
+}
+
+func TestDefaultDebugFormatRendersDesiredGenerationMetProminently(t *testing.T) {
+	SetDebug(true)
+	defer SetDebug(false)
+
+	if err := ConfigureDebugFormat(defaultDebugFormat); err != nil {
+		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
+	}
+
+	got := renderDebugTemplate(map[string]any{
+		"Event":           "desired_generation_met",
+		"Resource":        "worker-asg",
+		"RequirementType": "tag",
+		"RequirementKey":  "rotation",
+		"Wanted":          "v2",
+		"Actual":          "v2",
+	})
+	if !strings.Contains(got, "tag rotation on worker-asg satisfied") || !strings.Contains(got, "value=v2") {
+		t.Fatalf("renderDebugTemplate = %q, want prominent desired generation met message", got)
+	}
+}
+
 func TestConfigureDebugFormatSupportsPrefixAndTimestamp(t *testing.T) {
 	SetDebug(true)
 	defer SetDebug(false)

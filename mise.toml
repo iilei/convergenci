@@ -92,6 +92,29 @@ for scenario in asg-custom-tag-rotation asg-nested-module-complex-name ; do
 done
 """
 
+[tasks.fake-aws-scenarios-tag-rotation-lagging]
+depends = ["fake-aws-scenarios-scan"]
+description = "Verify await grants a grace period until AWS reflects a lagging tag rotation, then converges"
+run = """
+out_dir=\".bench/asg-custom-tag-rotation\";
+rm -f /tmp/convergenci-fake-aws-state-tag_rotation_lagging
+DEBUG=true CONVERGENCI_AWAIT_TIMEOUT=1s CONVERGENCI_AWAIT_INTERVAL=50ms FAKE_AWS_SCENARIO=tag-rotation-lagging \
+./convergenci await "${out_dir}/.convergence.json" \
+--aws-cli-path "$PWD/testdata/fake-aws-bin/aws"
+./convergenci report "${out_dir}/.convergence.convergence-report.json"
+"""
+
+[tasks.fake-aws-scenarios-mixed-outcomes]
+depends = ["fake-aws-scenarios-scan"]
+description = "Exercise a contract where one resource stays pending while the rest converge, then render the mixed report"
+run = """
+out_dir=\".bench/asg-nested-module-complex-name\";
+DEBUG=true CONVERGENCI_AWAIT_TIMEOUT=200ms CONVERGENCI_AWAIT_INTERVAL=50ms FAKE_AWS_SCENARIO=mixed-resource-outcomes \
+./convergenci await "${out_dir}/.convergence.json" \
+--aws-cli-path "$PWD/testdata/fake-aws-bin/aws" || true
+./convergenci report "${out_dir}/.convergence.convergence-report.json"
+"""
+
 [tasks.fake-aws-scenarios-await-slow]
 depends = ["build", "build-fake-aws"]
 description = "Render await reports with real polling delays"

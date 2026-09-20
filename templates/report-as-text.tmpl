@@ -15,7 +15,7 @@
 {{- if $r.resources -}}
   {{- if gt $pending 0 -}}{{- $status = "pending" -}}{{- $message = printf "%d resource(s) remain pending" $pending -}}{{- else -}}{{- $status = "successful" -}}{{- $message = "all resources converged" -}}{{- end -}}
 {{- end -}}
-Status: {{ $status }}
+Status: {{ statusColor $status }}
 Message: {{ $message }}
 Contract: {{ index $r "contract_path" | default "n/a" }}
 Expected resources: {{ len $r.resources }}
@@ -26,10 +26,10 @@ Finished at: {{ index $r "finished_at" | default "n/a" }}
 {{ if $r.resources }}
 ---
 Resources:
-{{- range $r.resources }}
+{{- range sortResources $r.resources }}
 {{- $obs := index . "observation" | default dict }}
- * {{ index . "address" | default "<unknown>" }}
-   status: {{ index . "status" | default "pending" }}
+ {{ statusBullet (index . "status" | default "pending") }} {{ bold (cyan (index . "address" | default "<unknown>")) }}
+   status: {{ statusColor (index . "status" | default "pending") }}
    arn: {{ index $obs "arn" | default "n/a" }}
    strategy: {{ index $obs "strategy" | default "n/a" }}
    desired: {{ if index . "desired_generation" }}{{ range $generation := index . "desired_generation" }}{{ index $generation "type" }} {{ index $generation "key" }}={{ index $generation "value" }} {{ end }}{{ else }}n/a{{ end }}
