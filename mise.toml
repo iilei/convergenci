@@ -15,12 +15,12 @@ run = "go vet ./..."
 [tasks.test]
 depends = ["build-fake-aws"]
 description = "Run Go tests"
-run = "go test ./..."
+run = "export CONVERGENCI_AWS_CLI_PATH=\"$PWD/testdata/fake-aws-bin/aws\" && go test ./..."
 
 [tasks.check]
 depends = ["build-fake-aws"]
 description = "Format, vet, and test the Go project"
-run = "gofmt -w . && go vet ./... && go test ./..."
+run = "gofmt -w . && go vet ./... && export CONVERGENCI_AWS_CLI_PATH=\"$PWD/testdata/fake-aws-bin/aws\" && go test ./..."
 
 [tasks.build]
 description = "Build the convergenci binary"

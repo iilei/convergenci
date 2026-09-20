@@ -1,6 +1,12 @@
 package awscmd
 
-import "testing"
+import (
+	"flag"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestConfigArgsIncludesProfile(t *testing.T) {
 	cfg := Config{BinaryPath: "/usr/local/bin/aws", Profile: "prod"}
@@ -35,5 +41,68 @@ func TestDefaultConfigUsesAWSCLIPathEnvironment(t *testing.T) {
 
 	if got := DefaultConfig().BinaryPath; got != "/tmp/fake-aws" {
 		t.Fatalf("DefaultConfig().BinaryPath = %q, want %q", got, "/tmp/fake-aws")
+	}
+}
+
+func TestDefaultConfigFallsBackToAWS(t *testing.T) {
+	t.Setenv("CONVERGENCI_AWS_CLI_PATH", "")
+
+	if got := DefaultConfig().BinaryPath; got != "aws" {
+		t.Fatalf("DefaultConfig().BinaryPath = %q, want %q", got, "aws")
+	}
+}
+
+func TestRegisterFlagsAndUsageText(t *testing.T) {
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	path, profile := RegisterFlags(fs)
+
+	if err := fs.Parse([]string{"--aws-cli-path", "/custom/aws", "--aws-profile-name", "staging"}); err != nil {
+		t.Fatalf("FlagSet.Parse returned error: %v", err)
+	}
+	if *path != "/custom/aws" {
+		t.Fatalf("aws-cli-path = %q, want %q", *path, "/custom/aws")
+	}
+	if *profile != "staging" {
+		t.Fatalf("aws-profile-name = %q, want %q", *profile, "staging")
+	}
+	for _, want := range []string{"--aws-cli-path", "--aws-profile-name"} {
+		if !strings.Contains(UsageText(), want) {
+			t.Fatalf("UsageText() = %q, want %q", UsageText(), want)
+		}
+	}
+}
+
+func TestConfigRunUsesConfiguredBinary(t *testing.T) {
+	cfg := Config{BinaryPath: "/bin/echo", Profile: "prod"}
+	out, err := cfg.Run("service", "operation")
+	if err != nil {
+		t.Fatalf("Config.Run returned error: %v", err)
+	}
+	if got, want := string(out), "--profile prod service operation\n"; got != want {
+		t.Fatalf("Config.Run output = %q, want %q", got, want)
+	}
+}
+
+func TestConfigRunUsesAWSFallbackBinary(t *testing.T) {
+	binDir := t.TempDir()
+	awsPath := filepath.Join(binDir, "aws")
+	if err := os.WriteFile(awsPath, []byte("#!/bin/sh\nprintf '%s' \"$1\"\n"), 0o755); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+	t.Setenv("PATH", binDir)
+
+	out, err := (Config{}).Run("service")
+	if err != nil {
+		t.Fatalf("Config.Run returned error: %v", err)
+	}
+	if got, want := string(out), "service"; got != want {
+		t.Fatalf("Config.Run output = %q, want %q", got, want)
+	}
+}
+
+func TestConfigRunReturnsCommandError(t *testing.T) {
+	_, err := Config{BinaryPath: "/bin/sh"}.Run("-c", "exit 7")
+	if err == nil {
+		t.Fatal("Config.Run returned nil error, want command error")
 	}
 }
