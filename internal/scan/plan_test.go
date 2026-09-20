@@ -1,6 +1,10 @@
 package scan
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestBuildContractDefaultASGRotation(t *testing.T) {
 	plan, err := LoadPlan("../../stubs/asg-default-rotation.json")
@@ -95,5 +99,158 @@ func TestBuildContractNestedModuleComplexAddress(t *testing.T) {
 	}
 	if got != "green" {
 		t.Fatalf("desired generation = %#v, want %q", got, "green")
+	}
+}
+
+func TestLoadPlanErrors(t *testing.T) {
+	t.Run("missing file", func(t *testing.T) {
+		if _, err := LoadPlan(filepath.Join(t.TempDir(), "missing.json")); err == nil {
+			t.Fatal("LoadPlan returned nil error, want read error")
+		}
+	})
+
+	t.Run("invalid JSON", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "invalid.json")
+		if err := os.WriteFile(path, []byte("{"), 0o644); err != nil {
+			t.Fatalf("os.WriteFile returned error: %v", err)
+		}
+		if _, err := LoadPlan(path); err == nil {
+			t.Fatal("LoadPlan returned nil error, want decode error")
+		}
+	})
+}
+
+func TestBuildContractFiltersChangesAndUsesCustomIndicators(t *testing.T) {
+	plan := TerraformPlan{ResourceChanges: []ResourceChange{
+		{
+			Address: "aws_instance.not_an_asg",
+			Type:    "aws_instance",
+			Change:  Change{After: map[string]any{"custom": "ignored"}},
+		},
+		{
+			Address: "aws_autoscaling_group.unmatched",
+			Type:    "aws_autoscaling_group",
+			Change:  Change{After: map[string]any{"custom": "ignored"}},
+		},
+		{
+			Address: "aws_autoscaling_group.no_indicator",
+			Type:    "aws_autoscaling_group",
+			Change:  Change{After: map[string]any{"name": "no-indicator"}},
+		},
+		{
+			Address: "module.app.aws_autoscaling_group.custom",
+			Type:    "aws_autoscaling_group",
+			Change: Change{After: map[string]any{
+				"name":   "custom-name",
+				"custom": "generation-7",
+			}},
+		},
+	}}
+
+	contract, err := BuildContract(plan, ASGDefaultPolicy, `module\.app\..*`, []string{"custom"})
+	if err != nil {
+		t.Fatalf("BuildContract returned error: %v", err)
+	}
+	if len(contract.Resources) != 1 {
+		t.Fatalf("len(resources) = %d, want 1", len(contract.Resources))
+	}
+	resource := contract.Resources[0]
+	if resource.Name != "custom-name" {
+		t.Fatalf("resource name = %q, want %q", resource.Name, "custom-name")
+	}
+	if got := resource.DesiredGeneration["custom"]; got != "generation-7" {
+		t.Fatalf("desired generation = %#v, want %q", got, "generation-7")
+	}
+}
+
+func TestBuildContractRejectsInvalidRegex(t *testing.T) {
+	_, err := BuildContract(TerraformPlan{}, ASGDefaultPolicy, "[", nil)
+	if err == nil {
+		t.Fatal("BuildContract returned nil error, want regex error")
+	}
+}
+
+func TestMatchedResourceNames(t *testing.T) {
+	plan := TerraformPlan{ResourceChanges: []ResourceChange{
+		{
+			Address: "aws_autoscaling_group.after",
+			Type:    "aws_autoscaling_group",
+			Change:  Change{Before: map[string]any{"name": "old"}, After: map[string]any{"name": "new"}},
+		},
+		{
+			Address: "aws_autoscaling_group.before",
+			Type:    "aws_autoscaling_group",
+			Change:  Change{Before: map[string]any{"name": "destroyed"}},
+		},
+		{
+			Address: "aws_autoscaling_group.missing",
+			Type:    "aws_autoscaling_group",
+			Change:  Change{After: map[string]any{"name": ""}},
+		},
+		{
+			Address: "aws_instance.ignored",
+			Type:    "aws_instance",
+			Change:  Change{After: map[string]any{"name": "instance"}},
+		},
+	}}
+
+	names, err := MatchedResourceNames(plan, ASGDefaultPolicy, "")
+	if err != nil {
+		t.Fatalf("MatchedResourceNames returned error: %v", err)
+	}
+	want := []string{"new", "destroyed"}
+	if len(names) != len(want) {
+		t.Fatalf("names = %#v, want %#v", names, want)
+	}
+	for index := range want {
+		if names[index] != want[index] {
+			t.Fatalf("names = %#v, want %#v", names, want)
+		}
+	}
+
+	if _, err := MatchedResourceNames(plan, ASGDefaultPolicy, "["); err == nil {
+		t.Fatal("MatchedResourceNames returned nil error, want regex error")
+	}
+}
+
+func TestNestedValue(t *testing.T) {
+	list := []any{
+		"not an object",
+		map[string]any{"key": "rotation", "value": "blue"},
+		map[string]any{"version": "5"},
+	}
+	object := map[string]any{
+		"nested": map[string]any{"value": "found"},
+		"list":   list,
+		"empty":  "",
+		"nil":    nil,
+	}
+
+	tests := []struct {
+		name string
+		path string
+		want any
+		ok   bool
+	}{
+		{name: "nested object", path: "nested.value", want: "found", ok: true},
+		{name: "list keyed value", path: "list.rotation", want: "blue", ok: true},
+		{name: "list object field", path: "list.version", want: "5", ok: true},
+		{name: "missing path", path: "missing", ok: false},
+		{name: "scalar cannot be traversed", path: "empty.value", ok: false},
+		{name: "empty value", path: "empty", ok: false},
+		{name: "nil value", path: "nil", ok: false},
+		{name: "nil object", path: "value", ok: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			input := object
+			if test.name == "nil object" {
+				input = nil
+			}
+			got, ok := nestedValue(input, test.path)
+			if ok != test.ok || got != test.want {
+				t.Fatalf("nestedValue(%#v, %q) = (%#v, %t), want (%#v, %t)", input, test.path, got, ok, test.want, test.ok)
+			}
+		})
 	}
 }
