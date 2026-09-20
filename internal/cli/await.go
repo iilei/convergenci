@@ -376,17 +376,17 @@ func pollAwait(
 		}
 		if status == "failed" {
 			return awaitPollResult{
-				Status:        "failed",
-				Message:       message,
-				ExitCode:      codeGenericFailure,
-				Pending:       pending,
-				Converged:     converged,
-				ResourceWaits: waits,
-				Contract:      contract,
-			}, &ExitCodeError{
-				Code:    codeGenericFailure,
-				Message: message,
-			}
+					Status:        "failed",
+					Message:       message,
+					ExitCode:      codeGenericFailure,
+					Pending:       pending,
+					Converged:     converged,
+					ResourceWaits: waits,
+					Contract:      contract,
+				}, &ExitCodeError{
+					Code:    codeGenericFailure,
+					Message: message,
+				}
 		}
 		if DebugEnabled() {
 			if formatted := renderDebugTemplate(map[string]any{
@@ -402,23 +402,6 @@ func pollAwait(
 		if timeout > 0 && time.Since(start) >= timeout {
 			fmt.Fprintf(os.Stderr, "timeout reached after %s\n", time.Since(start).Round(time.Second))
 			return awaitPollResult{
-				Status:        "timeout",
-				Message:       fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
-				ExitCode:      codeTimeout,
-				Pending:       pending,
-				Converged:     converged,
-				ResourceWaits: waits,
-				Contract:      contract,
-			}, &ExitCodeError{
-				Code:    codeTimeout,
-				Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
-			}
-		}
-		if timeout > 0 && attempt >= maxAttempts {
-			time.Sleep(interval)
-			if elapsed := time.Since(start); elapsed >= timeout {
-				fmt.Fprintf(os.Stderr, "timeout reached after %s\n", elapsed.Round(time.Second))
-				return awaitPollResult{
 					Status:        "timeout",
 					Message:       fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
 					ExitCode:      codeTimeout,
@@ -430,38 +413,55 @@ func pollAwait(
 					Code:    codeTimeout,
 					Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
 				}
+		}
+		if timeout > 0 && attempt >= maxAttempts {
+			time.Sleep(interval)
+			if elapsed := time.Since(start); elapsed >= timeout {
+				fmt.Fprintf(os.Stderr, "timeout reached after %s\n", elapsed.Round(time.Second))
+				return awaitPollResult{
+						Status:        "timeout",
+						Message:       fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
+						ExitCode:      codeTimeout,
+						Pending:       pending,
+						Converged:     converged,
+						ResourceWaits: waits,
+						Contract:      contract,
+					}, &ExitCodeError{
+						Code:    codeTimeout,
+						Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
+					}
 			}
 			continue
 		}
 		if attempt >= maxAttempts {
 			return awaitPollResult{
-				Status:        "pending",
-				Message:       fmt.Sprintf("%d resource(s) remain pending", pending),
-				ExitCode:      codeGenericFailure,
-				Pending:       pending,
-				Converged:     converged,
-				ResourceWaits: waits,
-				Contract:      contract,
-			}, &ExitCodeError{
-				Code:    codeGenericFailure,
-				Message: fmt.Sprintf("%d resource(s) remain pending", pending),
-			}
+					Status:        "pending",
+					Message:       fmt.Sprintf("%d resource(s) remain pending", pending),
+					ExitCode:      codeGenericFailure,
+					Pending:       pending,
+					Converged:     converged,
+					ResourceWaits: waits,
+					Contract:      contract,
+				}, &ExitCodeError{
+					Code:    codeGenericFailure,
+					Message: fmt.Sprintf("%d resource(s) remain pending", pending),
+				}
 		}
 		time.Sleep(interval)
 		if timeout > 0 && time.Since(start) >= timeout {
 			fmt.Fprintf(os.Stderr, "timeout reached after %s\n", time.Since(start).Round(time.Second))
 			return awaitPollResult{
-				Status:        "timeout",
-				Message:       fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
-				ExitCode:      codeTimeout,
-				Pending:       pending,
-				Converged:     converged,
-				ResourceWaits: waits,
-				Contract:      contract,
-			}, &ExitCodeError{
-				Code:    codeTimeout,
-				Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
-			}
+					Status:        "timeout",
+					Message:       fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
+					ExitCode:      codeTimeout,
+					Pending:       pending,
+					Converged:     converged,
+					ResourceWaits: waits,
+					Contract:      contract,
+				}, &ExitCodeError{
+					Code:    codeTimeout,
+					Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending),
+				}
 		}
 	}
 }
