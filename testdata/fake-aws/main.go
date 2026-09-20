@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func fakeAWSVersion() string {
@@ -183,7 +184,15 @@ func requestedASGName(rest []string) string {
 	return "fake-asg"
 }
 
+func applyFakeAWSDelay() {
+	delay, err := time.ParseDuration(strings.TrimSpace(os.Getenv("FAKE_AWS_DELAY")))
+	if err == nil && delay > 0 {
+		time.Sleep(delay)
+	}
+}
+
 func main() {
+	applyFakeAWSDelay()
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "fake aws: no command supplied")
 		os.Exit(2)

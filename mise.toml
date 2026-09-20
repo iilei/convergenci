@@ -64,10 +64,26 @@ description = "Exercise all built-in fake AWS scenarios against the await flow"
 run = """
 for scenario in asg-custom-tag-rotation asg-nested-module-complex-name ; do
     out_dir=\".bench/$scenario\";
-    CONVERGENCI_AWAIT_TIMEOUT=250ms CONVERGENCI_AWAIT_INTERVAL=50ms FAKE_AWS_SCENARIO=in-progress-then-success \
+    CONVERGENCI_AWAIT_TIMEOUT=1250ms CONVERGENCI_AWAIT_INTERVAL=10050ms FAKE_AWS_SCENARIO=in-progress-then-success \
     ./convergenci await "${out_dir}/.convergence.json" \
     --aws-cli-path "$PWD/testdata/fake-aws-bin/aws"
 done
+"""
+
+[tasks.fake-aws-scenarios-await-slow]
+depends = ["build", "build-fake-aws"]
+description = "Render await reports with real polling delays"
+run = """
+out_dir=".bench/slow-asg-default-rotation"; rm -rf "$out_dir"; mkdir -p "$out_dir";
+./convergenci scan stubs/asg-default-rotation.json \
+--output-json "${out_dir}/.convergence.json" \
+--aws-cli-path "$PWD/testdata/fake-aws-bin/aws"
+
+rm -f /tmp/convergenci-fake-aws-state-in_progress_then_success
+CONVERGENCI_AWAIT_TIMEOUT=2s CONVERGENCI_AWAIT_INTERVAL=750ms FAKE_AWS_DELAY=750ms FAKE_AWS_SCENARIO=in-progress-then-success \
+./convergenci await "${out_dir}/.convergence.json" \
+--aws-cli-path "$PWD/testdata/fake-aws-bin/aws"
+./convergenci report "${out_dir}/.convergence.convergence-report.json"
 """
 
 [tasks.render-report]

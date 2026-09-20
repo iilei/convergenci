@@ -32,7 +32,7 @@ Resources:
    status: {{ index . "status" | default "pending" }}
    arn: {{ index $obs "arn" | default "n/a" }}
    strategy: {{ index $obs "strategy" | default "n/a" }}
-   timeSpent: {{ if and (index $obs "timeSpent") (ne (index $obs "timeSpent") nil) }}{{ printf "%.2f" (index $obs "timeSpent") }}s{{ else }}n/a{{ end }}
+   timeSpent: {{ if and (index $obs "timeSpent") (ne (index $obs "timeSpent") nil) }}{{ printf "%.3f" (index $obs "timeSpent") }}s{{ else }}n/a{{ end }}
    desired: {{ if index . "desired_generation" }}{{ range $key, $value := index . "desired_generation" }}{{ $key }}={{ $value }} {{ end }}{{ else }}n/a{{ end }}
 {{- end }}
 ---
