@@ -559,6 +559,8 @@ It should not expose a generic cloud-provider abstraction merely for the sake of
 
 ## 15. ECS Adapter
 
+> **Out of scope for version < 1.x.x.** ECS is documented here as the intended second runtime target, but no ECS adapter is implemented before 1.x.x. ASG remains the only supported runtime kind until then.
+
 ECS is the second initial runtime target.
 
 The same high-level lifecycle applies:
