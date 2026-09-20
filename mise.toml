@@ -64,7 +64,7 @@ description = "Exercise all built-in fake AWS scenarios against the await flow"
 run = """
 for scenario in asg-custom-tag-rotation asg-nested-module-complex-name ; do
     out_dir=\".bench/$scenario\";
-    CONVERGENCI_AWAIT_TIMEOUT=1250ms CONVERGENCI_AWAIT_INTERVAL=10050ms FAKE_AWS_SCENARIO=in-progress-then-success \
+    CONVERGENCI_AWAIT_TIMEOUT=50ms CONVERGENCI_AWAIT_INTERVAL=5ms FAKE_AWS_SCENARIO=in-progress-then-success \
     ./convergenci await "${out_dir}/.convergence.json" \
     --aws-cli-path "$PWD/testdata/fake-aws-bin/aws"
 done
