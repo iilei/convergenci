@@ -1,6 +1,9 @@
 ---
 name: go-cli-coding
-description: "Use when generating, reviewing, or refactoring idiomatic Go for CLI applications. Follow the repo's .editorconfig, Go formatter and linter settings, and prefer imperative command UX with action-oriented help text and outputs. If no rumdl config exists, suggest one before inventing doc-style rules."
+description: >-
+  Use when generating, reviewing, or refactoring idiomatic Go for CLI applications. Follow the repo's .editorconfig,
+  Go formatter and linter settings, and prefer imperative command UX with action-oriented help text and outputs. If no
+  rumdl config exists, suggest one before inventing doc-style rules.
 argument-hint: "Go CLI code or review task"
 ---
 
@@ -30,6 +33,7 @@ argument-hint: "Go CLI code or review task"
    - Make error messages specific, direct, and corrective.
 4. Match repo formatting and lint expectations.
    - Keep code compatible with `gofmt`, `gofumpt`, `goimports`, and `golangci-lint fmt`.
+   - Regardless of `.editorconfig`, never exceed 220 characters per line unless the entire line matches `https://\S+`.
    - Avoid patterns that would trigger the repo's enabled linters, especially complexity, unused code, unchecked errors, and documentation issues.
    - If prose docs, README text, or generated help copy need style guidance and no rumdl configuration exists, suggest adding one rather than inventing ad hoc rules.
 5. Validate the result.

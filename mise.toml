@@ -27,7 +27,8 @@ run = "go build -o ./convergenci ./cmd/convergenci"
 description = "Build the fake AWS CLI binary for local bench testing"
 run = "mkdir -p ./testdata/fake-aws-bin && go build -o ./testdata/fake-aws-bin/aws ./testdata/fake-aws"
 
-# export CONVERGENCI_DEBUG_FORMAT='[{{ .Level }} {{ .Timestamp }}] status={{ .Status }} pct={{ .PercentageComplete }}'; export DEBUG=true;
+# export CONVERGENCI_DEBUG_FORMAT='[{{ .Level }} {{ .Timestamp }}] status={{ .Status }} pct={{ .PercentageComplete }}'
+# export DEBUG=true;
 [tasks.fake-aws-scenarios-scan]
 depends = ["build", "build-fake-aws"]
 description = "Exercise all built-in fake AWS scenarios against the await flow"
@@ -55,4 +56,7 @@ done
 [tasks.render-report]
 description = "Render the generated complex fake AWS report with gomplate"
 depends = [ "fake-aws-scenarios-await"]
-run = "gomplate -d report=file://$PWD/.bench/complex-report/.convergence.convergence-report.json -f templates/report-as-text.tmpl"
+run = """ \
+  gomplate -d report=file://$PWD/.bench/asg-nested-module-complex-name/.convergence.convergence-report.json \
+  -f templates/report-as-text.tmpl
+"""
