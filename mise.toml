@@ -41,6 +41,23 @@ for scenario in asg-custom-tag-rotation asg-nested-module-complex-name ; do
 done
 """
 
+[tasks.fake-aws-scenarios-assert-all-settled]
+depends = ["build", "build-fake-aws"]
+description = "Exercise the assert-all-settled preflight guard against success and in-progress scenarios"
+run = """
+for scenario in success in-progress; do
+    log="/tmp/convergenci-assert-all-settled-$scenario.log"
+    FAKE_AWS_SCENARIO="$scenario" \
+    ./convergenci scan stubs/asg-default-rotation.json \
+    --assert-all-settled \
+    --aws-cli-path "$PWD/testdata/fake-aws-bin/aws" \
+    >"$log" 2>&1 || true
+    echo "scenario=$scenario"
+    cat "$log"
+    echo '---'
+done
+"""
+
 [tasks.fake-aws-scenarios-await]
 depends = ["fake-aws-scenarios-scan"]
 description = "Exercise all built-in fake AWS scenarios against the await flow"
@@ -54,7 +71,7 @@ done
 """
 
 [tasks.render-report]
-description = "Render the generated complex fake AWS report with gomplate"
+description = "Render the generated fake AWS reports with the built-in report renderer"
 depends = [ "fake-aws-scenarios-await"]
 run = """ \
 for scenario in asg-custom-tag-rotation asg-nested-module-complex-name ; do

@@ -384,6 +384,31 @@ func TestAwaitReportWriting(t *testing.T) {
 	}
 }
 
+func TestLoadAwaitBaselineReadsSidecarFile(t *testing.T) {
+	tempDir := t.TempDir()
+	contractPath := filepath.Join(tempDir, "example.convergence.json")
+	baselinePath := baselineFilePath(contractPath)
+	baseline := scan.Contract{Resources: []scan.ContractItem{{Address: "asg.web", Kind: "aws_asg", Observation: scan.Observation{Strategy: "instance_refresh"}}}}
+	payload, err := json.MarshalIndent(baseline, "", "  ")
+	if err != nil {
+		t.Fatalf("json.MarshalIndent returned error: %v", err)
+	}
+	if err := os.WriteFile(baselinePath, payload, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	loaded, err := loadAwaitBaseline(contractPath)
+	if err != nil {
+		t.Fatalf("loadAwaitBaseline returned error: %v", err)
+	}
+	if len(loaded.Resources) != 1 {
+		t.Fatalf("loaded resources = %d, want 1", len(loaded.Resources))
+	}
+	if loaded.Resources[0].Address != "asg.web" {
+		t.Fatalf("loaded resource address = %q, want %q", loaded.Resources[0].Address, "asg.web")
+	}
+}
+
 func TestWithObservationFulfilledSetsEffectiveStatus(t *testing.T) {
 	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", Status: "pending", DesiredGeneration: map[string]any{"rotation": "v2"}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
 

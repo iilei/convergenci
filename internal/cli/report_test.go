@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -18,7 +19,7 @@ func TestReportCommandRendersConvergedReport(t *testing.T) {
 	reportJSON := `{
 		"status": "converged",
 		"resources": [
-			{"address": "module.app.aws_autoscaling_group.main", "status": "converged", "observation": {"strategy": "instance_refresh"}, "desired_generation": {"rotation": "bb"}}
+			{"address": "module.app.aws_autoscaling_group.main", "status": "converged", "observation": {"strategy": "instance_refresh", "timeSpent": 1.234567}, "desired_generation": {"rotation": "bb"}}
 		]
 	}`
 	if err := os.WriteFile(reportPath, []byte(reportJSON), 0o644); err != nil {
@@ -39,6 +40,24 @@ func TestReportCommandRendersConvergedReport(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("report output = %q, want it to contain %q", got, want)
 		}
+	}
+
+	var renderedTimeSpent string
+	for _, line := range strings.Split(got, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "timeSpent:") {
+			renderedTimeSpent = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "timeSpent:"))
+			break
+		}
+	}
+	if renderedTimeSpent == "" || renderedTimeSpent == "n/a" {
+		t.Fatalf("report output = %q, want a numeric timeSpent value", got)
+	}
+	seconds, err := strconv.ParseFloat(strings.TrimSuffix(renderedTimeSpent, "s"), 64)
+	if err != nil {
+		t.Fatalf("rendered timeSpent = %q, want a numeric value: %v", renderedTimeSpent, err)
+	}
+	if seconds < 1.2 || seconds > 1.3 {
+		t.Fatalf("rendered timeSpent = %v, want a value near 1.234567 seconds", seconds)
 	}
 }
 

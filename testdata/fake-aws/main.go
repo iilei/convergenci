@@ -65,7 +65,7 @@ func scenarioStatePath(scenario string) string {
 		name = "success"
 	}
 	name = strings.ReplaceAll(name, "-", "_")
-	return filepath.Join(os.TempDir(), fmt.Sprintf("convergenci-fake-aws-state-%s-%d", name, os.Getpid()))
+	return filepath.Join(os.TempDir(), fmt.Sprintf("convergenci-fake-aws-state-%s", name))
 }
 
 func delayedOutcome(scenario string, threshold int) string {
@@ -147,27 +147,25 @@ func complexReportAutoscalingGroups() []map[string]any {
 }
 
 func describeProgress(scenario string) (status string, percentage int, completedAt any) {
+	state := scenarioState(scenario)
 	switch scenario {
 	case "in-progress":
-		if scenarioState(scenario) == "success" {
+		if state == "success" {
 			return "Successful", 100, "2026-09-19T00:00:00Z"
 		}
 		return "InProgress", progressPercent(scenario, 30, 55, 75, 90), nil
 	case "in-progress-then-success":
-		if scenarioState(scenario) == "success" {
+		if state == "success" {
 			return "Successful", 100, "2026-09-19T00:00:00Z"
 		}
 		return "InProgress", progressPercent(scenario, 25, 60, 82, 95), nil
 	case "in-progress-then-failed":
-		if scenarioState(scenario) == "success" {
-			return "Failed", 100, "2026-09-19T00:00:00Z"
-		}
-		if scenarioState(scenario) == "failed" {
+		if state == "success" || state == "failed" {
 			return "Failed", 100, "2026-09-19T00:00:00Z"
 		}
 		return "InProgress", progressPercent(scenario, 20, 45, 75, 90), nil
 	case "late-success":
-		if scenarioState(scenario) == "success" {
+		if state == "success" {
 			return "Successful", 100, "2026-09-19T00:00:00Z"
 		}
 		return "InProgress", progressPercent(scenario, 35, 70, 96), nil
