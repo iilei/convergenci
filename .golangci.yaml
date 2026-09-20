@@ -143,6 +143,10 @@ linters:
           - dupl
           - mirror
           - dupword
+          # Tests assert on the concrete error type returned by the code under
+          # test (not a wrapped error from a chain), so a direct type assertion
+          # is correct here; errors.As adds no value over err.(*ExitCodeError).
+          - errorlint
       - path: 'cmd/'
         linters:
           - errcheck
