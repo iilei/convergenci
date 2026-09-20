@@ -15,7 +15,7 @@ AWS answers: what actually happened?
 Convergenci answers: has the intended runtime state converged?
 
 ```mermaid
-flowchart TD
+flowchart LR
     subgraph P1["1 . plan"]
         A["terraform plan -out=tfplan"] -->|"terraform CLI"| A2["tfplan.json"]
     end
@@ -335,19 +335,25 @@ convergenci report ./artifacts/asg-plan.convergence-report.json
 
 #### `doctor`
 
-Check AWS CLI availability and caller identity, and optionally render a report
-with a filesystem template.
+Diagnose AWS access before running convergence checks. `doctor` verifies that
+the configured AWS CLI is available and that the active credentials can call
+`sts get-caller-identity`. This makes it useful for checking the selected
+profile, region-independent credential setup, and executable path before
+debugging a failed `scan` or `await` run.
+
+It can also render an existing report as a secondary convenience, using an
+optional filesystem template.
 
 ```bash
 convergenci doctor [--template PATH] [--aws-cli-path PATH] [--aws-profile-name NAME] [report.json]
 ```
 
-Without a report argument, `doctor` verifies that the AWS CLI can run and that
-`sts get-caller-identity` succeeds. With a report argument, it additionally
-renders that JSON file using `--template`; the default path is
-`templates/report-as-text.tmpl` relative to the current working directory.
-Unlike `report`, this template is read from the filesystem rather than embedded
-in the binary.
+Without a report argument, `doctor` performs only the AWS diagnostic. With a
+report argument, it performs the diagnostic first and then renders that JSON
+file using `--template`. An explicitly supplied template path is read from the
+filesystem; the default path is `templates/report-as-text.tmpl` relative to the
+current working directory. For ordinary report rendering without an external
+template file, use `report` instead.
 
 Example:
 
