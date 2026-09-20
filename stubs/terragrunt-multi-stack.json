@@ -9,12 +9,12 @@
     "actions": ["update"],
     "before": {
      "name": "prod-us-east-1-web",
-     "tags": { "convergenci_rotation": "blue" },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "blue" }],
      "launch_template": { "version": "7" }
     },
     "after": {
      "name": "prod-us-east-1-web",
-     "tags": { "convergenci_rotation": "green" },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "green" }],
      "launch_template": { "version": "8" }
     }
    }
@@ -26,12 +26,12 @@
     "actions": ["update"],
     "before": {
      "name": "prod-us-east-1-worker",
-     "tags": { "convergenci_rotation": "blue" },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "blue" }],
      "launch_template": { "version": "11" }
     },
     "after": {
      "name": "prod-us-east-1-worker",
-     "tags": { "convergenci_rotation": "green" },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "green" }],
      "launch_template": { "version": "12" }
     }
    }
@@ -43,12 +43,12 @@
     "actions": ["update"],
     "before": {
      "name": "prod-eu-west-1-web",
-     "tags": { "convergenci_rotation": "blue" },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "blue" }],
      "launch_template": { "version": "7" }
     },
     "after": {
      "name": "prod-eu-west-1-web",
-     "tags": { "convergenci_rotation": "green" },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "green" }],
      "launch_template": { "version": "8" }
     }
    }
@@ -60,12 +60,12 @@
     "actions": ["update"],
     "before": {
      "name": "prod-eu-west-1-worker",
-     "tags": { "convergenci_rotation": "blue" },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "blue" }],
      "launch_template": { "version": "11" }
     },
     "after": {
      "name": "prod-eu-west-1-worker",
-     "tags": { "convergenci_rotation": "green" },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "green" }],
      "launch_template": { "version": "12" }
     }
    }

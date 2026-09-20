@@ -1,5 +1,7 @@
 # Convergenci
 
+[![codecov](https://codecov.io/gh/iilei/convergenci-cli/graph/badge.svg?token=RMVFXWV6SQ)](https://codecov.io/gh/iilei/convergenci-cli)
+
 Convergenci is a small AWS-bound CLI that verifies that an infrastructure change has converged to the intended runtime state.
 
 The tool does not perform infrastructure changes itself. Terraform remains responsible for applying changes. Convergenci observes AWS after the change and determines whether the expected postcondition has been reached.
@@ -17,7 +19,6 @@ Convergenci answers: has the intended runtime state converged?
 The initial implementation is intentionally AWS-specific and focuses on:
 
 - EC2 Auto Scaling Groups (ASG)
-- Amazon ECS
 
 It does not currently include:
 
@@ -42,6 +43,79 @@ terraform apply tfplan
 convergenci await convergence.json
 ```
 
+## Billable AWS tests
+
+The repository includes opt-in end-to-end tests that create a small Auto Scaling
+Group in `eu-central-1`, exercise the Terraform plan, convergence scan,
+`assert-all-settled`, await, and report flow, and destroy the resources on exit.
+They are separate from the local fake-AWS benches because they create billable
+AWS resources.
+
+### Authentication and prerequisites
+
+Install the repository-managed tools first:
+
+```bash
+mise install
+```
+
+The live tests also require the AWS CLI. Use
+an isolated AWS account or sandbox role with permission to manage the test
+resources. The test uses the normal AWS credential chain; it does not read
+credentials from repository files.
+
+For AWS SSO, configure a profile interactively and log in before running the
+test:
+
+```bash
+aws configure sso --profile convergenci-sandbox
+aws sso login --profile convergenci-sandbox
+export AWS_PROFILE=convergenci-sandbox
+```
+
+For an assumed role or CI identity, configure the standard AWS environment
+variables or web-identity credential variables instead. Do not commit access
+keys, session tokens, or backend credentials.
+
+The test is fixed to `eu-central-1` and requires an explicit opt-in:
+
+```bash
+export ALLOW_BILLABLE_TEST=true
+mise run billable-terraform-test
+```
+
+The live instance-refresh warmup defaults to one second for a quick test. Set
+`CONVERGENCI_LIVE_INSTANCE_WARMUP_SECONDS` to a larger non-negative integer to
+make polling and refresh progress easier to observe:
+
+```bash
+CONVERGENCI_LIVE_INSTANCE_WARMUP_SECONDS=30 \
+  mise run billable-terraform-test
+```
+
+To verify timeout handling, use the dedicated scenario. It intentionally sets
+the await timeout below the instance warmup and succeeds only when timeout is
+reported as expected:
+
+```bash
+mise run billable-terraform-test-timeout
+```
+
+Run the Terragrunt variant with:
+
+```bash
+export ALLOW_BILLABLE_TEST=true
+export AWS_PROFILE=convergenci-sandbox
+mise run billable-terragrunt-test
+```
+
+The test uses the default VPC and one small `t3.micro` instance. It does not
+create a NAT gateway, load balancer, database, or other supporting service.
+Every resource receives a unique `convergenci-test-id` tag. Cleanup is installed
+as an exit trap and runs Terraform or Terragrunt destroy even when the test
+fails or is interrupted. A failed process should still be checked manually in
+the AWS console before the sandbox is reused.
+
 `scan` is the stateless plan-to-contract step: it resolves the relevant AWS
 resources from the Terraform plan and emits a convergence contract.
 
@@ -56,6 +130,34 @@ the duration of `apply`, so at most one relevant change can be in flight.
 Under that assumption, correlation between an apply and its runtime effect no
 longer needs to resolve concurrent/superseding changes (see the ADR for
 details) — it only needs a pre-apply/post-apply boundary.
+
+### Refresh correlation edge case
+
+The state lock does not cover the complete shell sequence from `plan` through
+`scan`, `apply`, and `await`. Use an external CI/job lock when multiple
+deployments could otherwise run concurrently. Always apply the exact saved plan
+that was scanned, and invoke `scan --assert-all-settled` immediately before
+that apply.
+
+For ASGs, a previous successful instance refresh can still be visible when
+`await` starts. A successful observation must therefore be understood as the
+refresh produced by the just-applied plan, not merely as any historical
+successful refresh. Avoid reusing an old convergence contract or report, keep
+the plan, contract, and report together, and treat a preflight failure as a
+reason to stop rather than to continue with `await`.
+
+The invariant to verify in integration tests is:
+
+```text
+assert-all-settled succeeds
+apply the saved plan
+await does not accept the previous refresh as this apply's result
+await accepts the new refresh only after its expected trigger converges
+```
+
+If the workflow cannot guarantee that boundary, do not infer convergence from
+an already-successful runtime state; serialize the deployment externally and
+rerun the plan/scan/apply sequence.
 
 ## CLI
 
@@ -173,6 +275,14 @@ convergenci report ./artifacts/asg-plan.convergence-report.json
 ## Debug logging
 
 Debug logging is controlled by the global `DEBUG` environment variable and the `--debug` flag.
+
+When debug logging is enabled, the default format is:
+
+```text
+[DEBUG 2026-09-19T12:00:00Z] status=InProgress pct=45
+```
+
+Override it with `CONVERGENCI_DEBUG_FORMAT` or the `--debug-format` flag.
 
 ```bash
 DEBUG=true convergenci --debug scan tfplan.json

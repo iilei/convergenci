@@ -13,6 +13,8 @@ import (
 
 var logger = newLogger(false)
 
+const defaultDebugFormat = "[{{ .Level }} {{ .Timestamp }}] status={{ .Status }} pct={{ .PercentageComplete }}"
+
 func newLogger(enabled bool) *loggerState {
 	return &loggerState{enabled: enabled}
 }
@@ -182,4 +184,9 @@ func debugFromEnv() bool {
 
 func init() {
 	ConfigureLoggerFromEnv()
+	format := strings.TrimSpace(os.Getenv("CONVERGENCI_DEBUG_FORMAT"))
+	if format == "" {
+		format = defaultDebugFormat
+	}
+	_ = ConfigureDebugFormat(format)
 }

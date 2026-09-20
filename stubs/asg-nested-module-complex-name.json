@@ -9,18 +9,14 @@
     "actions": ["update"],
     "before": {
      "name": "shared-platform-worker-group-0",
-     "tags": {
-      "convergenci_rotation": "blue"
-     },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "blue" }],
      "launch_template": {
       "version": "3"
      }
     },
     "after": {
      "name": "shared-platform-worker-group-0",
-     "tags": {
-      "convergenci_rotation": "green"
-     },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "green" }],
      "launch_template": {
       "version": "4"
      }
@@ -34,18 +30,14 @@
     "actions": ["update"],
     "before": {
      "name": "shared-platform-worker-group-1",
-     "tags": {
-      "convergenci_rotation": "blue"
-     },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "blue" }],
      "launch_template": {
       "version": "3"
      }
     },
     "after": {
      "name": "shared-platform-worker-group-1",
-     "tags": {
-      "convergenci_rotation": "green"
-     },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "green" }],
      "launch_template": {
       "version": "4"
      }
@@ -59,18 +51,14 @@
     "actions": ["update"],
     "before": {
      "name": "shared-platform-worker-group-2",
-     "tags": {
-      "convergenci_rotation": "blue"
-     },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "blue" }],
      "launch_template": {
       "version": "3"
      }
     },
     "after": {
      "name": "shared-platform-worker-group-2",
-     "tags": {
-      "convergenci_rotation": "green"
-     },
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "green" }],
      "launch_template": {
       "version": "4"
      }

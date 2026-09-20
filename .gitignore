@@ -12,3 +12,4 @@ convergenci
 testdata/fake-aws-bin
 /fake-aws
 !testdata/fake-aws/*
+testdata/aws-live/**/.*.lock*

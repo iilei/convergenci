@@ -39,9 +39,10 @@ var ASGDefaultPolicy = RecordPolicy{
 	ResourceType: "aws_autoscaling_group",
 	DefaultRegex: `(?i).*aws_autoscaling_group.*`,
 	DefaultPaths: []string{
-		"tags.rotation",
-		"tags.convergenci_rotation",
+		"tag.rotation",
+		"tag.convergenci_rotation",
 		"launch_template.version",
+		"mixed_instances_policy.launch_template.launch_template_specification.version",
 		"mixed_instances_policy.launch_template.version",
 	},
 }
@@ -64,10 +65,9 @@ type ContractItem struct {
 
 // Observation captures the AWS runtime strategy expected for the resource.
 type Observation struct {
-	Strategy  string   `json:"strategy"`
-	Fulfilled *bool    `json:"fulfilled"`
-	TimeSpent *float64 `json:"timeSpent"`
-	ARN       string   `json:"arn,omitempty"`
+	Strategy  string `json:"strategy"`
+	Fulfilled *bool  `json:"fulfilled"`
+	ARN       string `json:"arn,omitempty"`
 }
 
 // LoadPlan reads a Terraform plan JSON file from disk.
@@ -215,15 +215,39 @@ func nestedValue(obj map[string]any, path string) (any, bool) {
 	}
 	curr := any(obj)
 	for _, part := range strings.Split(path, ".") {
-		v, ok := curr.(map[string]any)
+		if object, ok := curr.(map[string]any); ok {
+			next, exists := object[part]
+			if !exists {
+				return nil, false
+			}
+			curr = next
+			continue
+		}
+		list, ok := curr.([]any)
 		if !ok {
 			return nil, false
 		}
-		next, ok := v[part]
-		if !ok {
+		found := false
+		for _, item := range list {
+			object, objectOK := item.(map[string]any)
+			if !objectOK {
+				continue
+			}
+			key, keyOK := object["key"].(string)
+			if keyOK && key == part {
+				curr = object["value"]
+				found = true
+				break
+			}
+			if next, exists := object[part]; exists {
+				curr = next
+				found = true
+				break
+			}
+		}
+		if !found {
 			return nil, false
 		}
-		curr = next
 	}
 
 	if curr == nil {

@@ -9,19 +9,41 @@
     "actions": ["update"],
     "before": {
      "name": "mixed-asg",
-     "mixed_instances_policy": {
-      "launch_template": {
-       "version": "3"
+     "mixed_instances_policy": [
+      {
+       "instances_distribution": [],
+       "launch_template": [
+        {
+         "launch_template_specification": [
+          {
+           "launch_template_id": "lt-mixed",
+           "version": "3"
+          }
+         ],
+         "override": []
+        }
+       ]
       }
-     }
+     ]
     },
     "after": {
      "name": "mixed-asg",
-     "mixed_instances_policy": {
-      "launch_template": {
-       "version": "4"
+     "mixed_instances_policy": [
+      {
+       "instances_distribution": [],
+       "launch_template": [
+        {
+         "launch_template_specification": [
+          {
+           "launch_template_id": "lt-mixed",
+           "version": "4"
+          }
+         ],
+         "override": []
+        }
+       ]
       }
-     }
+     ]
     }
    }
   }

@@ -1,5 +1,8 @@
 [tools]
+aws-cli = { version = "latest", symlink_bins = "true" }
 gomplate = "latest"
+terraform = "1.16.3"
+terragrunt = "1.1.5"
 
 [tasks.fmt]
 description = "Format Go sources"
@@ -27,13 +30,31 @@ run = "go build -o ./convergenci ./cmd/convergenci"
 description = "Build the fake AWS CLI binary for local bench testing"
 run = "mkdir -p ./testdata/fake-aws-bin && go build -o ./testdata/fake-aws-bin/aws ./testdata/fake-aws"
 
+[tasks.billable-terraform-test]
+depends = ["build"]
+description = "Run the opt-in live AWS convergence test with Terraform"
+run = "./testdata/aws-live/run.sh terraform"
+
+[tasks.billable-terraform-test-timeout]
+depends = ["build"]
+description = "Run the opt-in Terraform test and verify await timeout handling"
+run = """\
+CONVERGENCI_LIVE_INSTANCE_WARMUP_SECONDS=30 CONVERGENCI_LIVE_AWAIT_TIMEOUT=5s CONVERGENCI_LIVE_EXPECT_TIMEOUT=true \
+./testdata/aws-live/run.sh terraform
+"""
+
+[tasks.billable-terragrunt-test]
+depends = ["build"]
+description = "Run the opt-in live AWS convergence test with Terragrunt"
+run = "./testdata/aws-live/run.sh terragrunt"
+
 # export CONVERGENCI_DEBUG_FORMAT='[{{ .Level }} {{ .Timestamp }}] status={{ .Status }} pct={{ .PercentageComplete }}'
 # export DEBUG=true;
 [tasks.fake-aws-scenarios-scan]
 depends = ["build", "build-fake-aws"]
 description = "Exercise all built-in fake AWS scenarios against the await flow"
 run = """
-for scenario in asg-custom-tag-rotation asg-nested-module-complex-name ; do
+for scenario in asg-custom-tag-rotation asg-mixed-instance-policy asg-nested-module-complex-name ; do
     out_dir=\".bench/$scenario\"; rm -rf "$out_dir"; mkdir -p \"$out_dir\";
     ./convergenci scan stubs/$scenario.json  \
     --output-json "${out_dir}/.convergence.json" \

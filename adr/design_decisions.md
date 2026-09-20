@@ -105,6 +105,35 @@ This separation keeps responsibilities clear:
 - Terraform: declare and apply infrastructure changes
 - Convergenci: observe AWS and wait for runtime convergence
 
+### Lock and correlation boundary
+
+Terraform's state lock protects individual Terraform operations. It does not
+remain held across the complete sequence:
+
+```text
+plan -> show -> assert-all-settled -> scan -> apply -> await
+```
+
+The caller therefore needs an external CI/job lock when more than one
+deployment could operate on the same state. The apply must use the exact saved
+plan that was scanned, and the preflight assertion should run immediately
+before that apply.
+
+For ASGs, an earlier successful instance refresh may still be observable when
+`await` starts. The integration invariant is that `await` must not mistake
+that previous success for the refresh created by the current apply. The
+minimal test scenario is:
+
+1. Establish a previous successful refresh.
+2. Run `scan --assert-all-settled` and require success.
+3. Apply the saved plan.
+4. Require `await` to observe the new expected trigger before reporting success.
+
+This is an integration invariant, not a reason to introduce a larger
+correlation abstraction prematurely. If the caller cannot guarantee the
+plan/apply boundary or deployment serialization, it must stop and rerun the
+workflow rather than reuse an old contract or report.
+
 ---
 
 ## 5. Two Different Identities

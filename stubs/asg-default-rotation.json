@@ -9,18 +9,14 @@
     "actions": ["update"],
     "before": {
      "name": "app-asg",
-     "tags": {
-      "rotation": "aa"
-     },
+     "tag": [{ "key": "rotation", "propagate_at_launch": true, "value": "aa" }],
      "launch_template": {
       "version": "5"
      }
     },
     "after": {
      "name": "app-asg",
-     "tags": {
-      "rotation": "bb"
-     },
+     "tag": [{ "key": "rotation", "propagate_at_launch": true, "value": "bb" }],
      "launch_template": {
       "version": "6"
      }

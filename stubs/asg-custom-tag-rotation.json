@@ -9,15 +9,11 @@
     "actions": ["update"],
     "before": {
      "name": "worker-asg",
-     "tags": {
-      "convergenci_rotation": "v1"
-     }
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "v1" }]
     },
     "after": {
      "name": "worker-asg",
-     "tags": {
-      "convergenci_rotation": "v2"
-     }
+     "tag": [{ "key": "convergenci_rotation", "propagate_at_launch": true, "value": "v2" }]
     }
    }
   }

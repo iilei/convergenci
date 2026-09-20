@@ -389,6 +389,21 @@ func TestAwaitReportWriting(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(tempDir, "example.convergence-report.json")); err != nil {
 		t.Fatalf("summary report not created: %v", err)
 	}
+	reportData, err := os.ReadFile(filepath.Join(tempDir, "example.convergence-report.json"))
+	if err != nil {
+		t.Fatalf("ReadFile report returned error: %v", err)
+	}
+	var report map[string]any
+	if err := json.Unmarshal(reportData, &report); err != nil {
+		t.Fatalf("json.Unmarshal report returned error: %v", err)
+	}
+	if report["status"] != "pending" {
+		t.Fatalf("report status = %v, want pending", report["status"])
+	}
+	resources, ok := report["resources"].([]any)
+	if !ok || len(resources) != 1 {
+		t.Fatalf("report resources = %v, want one resource", report["resources"])
+	}
 }
 
 func TestLoadAwaitBaselineReadsSidecarFile(t *testing.T) {
@@ -428,18 +443,6 @@ func TestWithObservationFulfilledSetsEffectiveStatus(t *testing.T) {
 	}
 	if updated.Resources[0].Observation.Fulfilled == nil || !*updated.Resources[0].Observation.Fulfilled {
 		t.Fatalf("fulfilled flag = %v, want true", updated.Resources[0].Observation.Fulfilled)
-	}
-}
-
-func TestWithObservationMetadataSetsTimeSpent(t *testing.T) {
-	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", Status: "pending", DesiredGeneration: map[string]any{"rotation": "v2"}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
-
-	updated := withObservationMetadata(contract, []awaitResourceWait{{Address: "module.app.aws_autoscaling_group.main", Status: "converged", Wait: 250 * time.Millisecond}}, "converged")
-	if updated.Resources[0].Observation.TimeSpent == nil {
-		t.Fatalf("Observation.TimeSpent = nil, want a pointer to a positive float value")
-	}
-	if got, want := *updated.Resources[0].Observation.TimeSpent, 0.25; got != want {
-		t.Fatalf("Observation.TimeSpent = %v, want %v", got, want)
 	}
 }
 

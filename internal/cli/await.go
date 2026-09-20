@@ -43,15 +43,16 @@ func (e *ExitCodeError) Error() string {
 }
 
 type awaitReport struct {
-	SchemaVersion      int       `json:"schema_version"`
-	Status             string    `json:"status"`
-	Message            string    `json:"message,omitempty"`
-	ContractPath       string    `json:"contract_path"`
-	StartedAt          time.Time `json:"started_at"`
-	FinishedAt         time.Time `json:"finished_at"`
-	ExpectedResources  int       `json:"expected_resources"`
-	PendingResources   int       `json:"pending_resources"`
-	ConvergedResources int       `json:"converged_resources"`
+	SchemaVersion      int                 `json:"schema_version"`
+	Status             string              `json:"status"`
+	Message            string              `json:"message,omitempty"`
+	ContractPath       string              `json:"contract_path"`
+	StartedAt          time.Time           `json:"started_at"`
+	FinishedAt         time.Time           `json:"finished_at"`
+	ExpectedResources  int                 `json:"expected_resources"`
+	PendingResources   int                 `json:"pending_resources"`
+	ConvergedResources int                 `json:"converged_resources"`
+	Resources          []scan.ContractItem `json:"resources"`
 }
 
 func envDuration(name string, fallback time.Duration) time.Duration {
@@ -72,11 +73,14 @@ func (c *Command) executeAwait(args []string) error {
 
 	defaultTimeout := envDuration("CONVERGENCI_AWAIT_TIMEOUT", defaultAwaitTimeout)
 	defaultInterval := envDuration("CONVERGENCI_AWAIT_INTERVAL", defaultAwaitInterval)
-	defaultDebugFormat := strings.TrimSpace(os.Getenv("CONVERGENCI_DEBUG_FORMAT"))
+	envDebugFormat := strings.TrimSpace(os.Getenv("CONVERGENCI_DEBUG_FORMAT"))
+	if envDebugFormat == "" {
+		envDebugFormat = defaultDebugFormat
+	}
 	timeout := fs.Duration("timeout", defaultTimeout, "maximum time to wait before failing")
 	interval := fs.Duration("interval", defaultInterval, "polling interval between checks")
 	force := fs.Bool("force", false, "overwrite an existing report file")
-	debugFormat := fs.String("debug-format", defaultDebugFormat, "template for debug progress output; e.g. '{{ .Status }} {{ .PercentageComplete }}%' ")
+	debugFormat := fs.String("debug-format", envDebugFormat, "template for debug progress output; e.g. '{{ .Status }} {{ .PercentageComplete }}%' ")
 	awsCLIPath, awsProfileName := awscmd.RegisterFlags(fs)
 	fs.Usage = func() {
 		fmt.Fprintf(c.out, "Usage: convergenci await <convergence.json>\n\n")
@@ -151,18 +155,18 @@ func (c *Command) executeAwait(args []string) error {
 		contract = result.Contract
 	}
 	if err != nil {
-		if reportErr := writeAwaitReport(path, contract, result.Status, *force, result.ResourceWaits); reportErr != nil {
+		if reportErr := writeAwaitReport(path, contract, result.Status, *force, result.ResourceWaits, result.StartedAt, result.FinishedAt); reportErr != nil {
 			return &ExitCodeError{Code: codeIOError, Message: fmt.Sprintf("unable to write summary report: %v", reportErr)}
 		}
 		return err
 	}
 	if result.Status == "converged" {
-		if err := writeAwaitReport(path, contract, result.Status, *force, result.ResourceWaits); err != nil {
+		if err := writeAwaitReport(path, contract, result.Status, *force, result.ResourceWaits, result.StartedAt, result.FinishedAt); err != nil {
 			return &ExitCodeError{Code: codeIOError, Message: fmt.Sprintf("unable to write summary report: %v", err)}
 		}
 		return nil
 	}
-	if err := writeAwaitReport(path, contract, result.Status, *force, result.ResourceWaits); err != nil {
+	if err := writeAwaitReport(path, contract, result.Status, *force, result.ResourceWaits, result.StartedAt, result.FinishedAt); err != nil {
 		return &ExitCodeError{Code: codeIOError, Message: fmt.Sprintf("unable to write summary report: %v", err)}
 	}
 	return &ExitCodeError{Code: result.ExitCode, Message: result.Message}
@@ -251,13 +255,20 @@ type awaitPollResult struct {
 	Converged     int
 	ResourceWaits []awaitResourceWait
 	Contract      scan.Contract
+	StartedAt     time.Time
+	FinishedAt    time.Time
 }
 
-func pollAwait(contract scan.Contract, timeout, interval time.Duration, cmdCfg awscmd.Config) (awaitPollResult, error) {
+func pollAwait(contract scan.Contract, timeout, interval time.Duration, cmdCfg awscmd.Config) (result awaitPollResult, err error) {
+	start := time.Now().UTC()
+	defer func() {
+		result.StartedAt = start
+		result.FinishedAt = time.Now().UTC()
+	}()
 	if len(contract.Resources) == 0 {
 		return awaitPollResult{Status: "converged", Message: "no resources to check", ExitCode: 0, Pending: 0, Converged: 0, Contract: contract}, nil
 	}
-	start := time.Now()
+	start = time.Now().UTC()
 	maxAttempts := 1
 	if timeout > 0 && interval > 0 {
 		maxAttempts = int((timeout + interval - 1) / interval)
@@ -395,7 +406,7 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status strin
 				refreshStatus = "converged"
 			case "FAILED":
 				refreshStatus = "failed"
-			case "INPROGRESS":
+			case "INPROGRESS", "PENDING":
 				return "pending", "", nil
 			}
 		}
@@ -444,7 +455,10 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status strin
 	arn = group.AutoScalingGroupARN
 	if DebugEnabled() {
 		for _, activity := range group.Activities {
-			if formatted := renderDebugTemplate(activity); formatted != "" {
+			if formatted := renderDebugTemplate(map[string]any{
+				"Status":             activity.StatusCode,
+				"PercentageComplete": activity.Progress,
+			}); formatted != "" {
 				logger.logLine(formatted)
 			}
 		}
@@ -481,33 +495,40 @@ func expectedPendingResources(contract scan.Contract) int {
 	return pending
 }
 
-func awaitSummaryReport(path, status, message string, contract scan.Contract) awaitReport {
+func awaitSummaryReport(path, status, message string, contract scan.Contract, times ...time.Time) awaitReport {
+	startedAt := time.Now().UTC().Add(-time.Second)
+	finishedAt := time.Now().UTC()
+	if len(times) >= 2 && !times[0].IsZero() && !times[1].IsZero() {
+		startedAt = times[0]
+		finishedAt = times[1]
+	}
 	if strings.EqualFold(strings.TrimSpace(status), "converged") {
 		return awaitReport{
 			SchemaVersion:      1,
 			Status:             status,
 			Message:            message,
 			ContractPath:       path,
-			StartedAt:          time.Now().UTC().Add(-time.Second),
-			FinishedAt:         time.Now().UTC(),
+			StartedAt:          startedAt,
+			FinishedAt:         finishedAt,
 			ExpectedResources:  len(contract.Resources),
 			PendingResources:   0,
 			ConvergedResources: len(contract.Resources),
+			Resources:          contract.Resources,
 		}
 	}
 	pending := expectedPendingResources(contract)
 	converged := len(contract.Resources) - pending
-	now := time.Now().UTC()
 	return awaitReport{
 		SchemaVersion:      1,
 		Status:             status,
 		Message:            message,
 		ContractPath:       path,
-		StartedAt:          now.Add(-time.Second),
-		FinishedAt:         now,
+		StartedAt:          startedAt,
+		FinishedAt:         finishedAt,
 		ExpectedResources:  len(contract.Resources),
 		PendingResources:   pending,
 		ConvergedResources: converged,
+		Resources:          contract.Resources,
 	}
 }
 
@@ -523,8 +544,13 @@ func contractReportPath(contractPath string) string {
 	return filepath.Join(filepath.Dir(contractPath), stem+".convergence-report.json")
 }
 
-func writeAwaitReport(contractPath string, contract scan.Contract, status string, force bool, waits []awaitResourceWait) error {
+func writeAwaitReport(contractPath string, contract scan.Contract, status string, force bool, waits []awaitResourceWait, times ...time.Time) error {
 	updated := withObservationMetadata(contract, waits, status)
+	message := fmt.Sprintf("%d resource(s) remain pending", expectedPendingResources(updated))
+	if strings.EqualFold(strings.TrimSpace(status), "converged") {
+		message = "all resources converged"
+	}
+	report := awaitSummaryReport(contractPath, status, message, updated, times...)
 	reportPath := contractReportPath(contractPath)
 	if safePath, err := safeOutputFilePath(reportPath, force); err != nil {
 		return err
@@ -542,7 +568,7 @@ func writeAwaitReport(contractPath string, contract scan.Contract, status string
 	if err := os.MkdirAll(filepath.Dir(reportPath), 0o755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(updated, "", "  ")
+	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -552,12 +578,6 @@ func writeAwaitReport(contractPath string, contract scan.Contract, status string
 
 func withObservationMetadata(contract scan.Contract, waits []awaitResourceWait, status string) scan.Contract {
 	updated := contract
-	byAddress := map[string]time.Duration{}
-	for _, wait := range waits {
-		if wait.Address != "" {
-			byAddress[wait.Address] = wait.Wait
-		}
-	}
 	for i := range updated.Resources {
 		if updated.Resources[i].Observation.Fulfilled != nil {
 			if *updated.Resources[i].Observation.Fulfilled {
@@ -576,12 +596,6 @@ func withObservationMetadata(contract scan.Contract, waits []awaitResourceWait, 
 		} else {
 			updated.Resources[i].Status = "pending"
 			updated.Resources[i].Observation.Fulfilled = nil
-		}
-		if wait, ok := byAddress[updated.Resources[i].Address]; ok {
-			seconds := float64(wait) / float64(time.Second)
-			updated.Resources[i].Observation.TimeSpent = &seconds
-		} else {
-			updated.Resources[i].Observation.TimeSpent = nil
 		}
 	}
 	return updated
