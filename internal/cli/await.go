@@ -854,5 +854,3 @@ func relativePathForCurrentWorkingDir(path string) string {
 	}
 	return filepath.Clean(path)
 }
-
-var errBadConfig = errors.New("bad configuration")
