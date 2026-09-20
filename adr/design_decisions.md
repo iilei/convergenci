@@ -444,7 +444,9 @@ verify postcondition
 
 This removes the need for supersession handling (Section 10) while keeping the existing contract-based postcondition model (Section 7) unchanged: the contract still defines what "converged" means, `--assert-all-settled` only establishes that nothing was already in flight before the apply.
 
-Because `--assert-all-settled` does not persist a pre-apply runtime ID anywhere, `await` currently has no baseline to distinguish "the instance refresh caused by this apply" from one that started between the assertion and `apply` outside of the lock's protection. In practice the lock is expected to prevent that gap; if stronger before/after correlation is needed later, a baseline artifact could be reintroduced without changing `--assert-all-settled`'s stateless, contract-free interface.
+Importantly, `--assert-all-settled` is not a separate baseline-aware observation layer. It follows the same scan path for resource matching and any scan-phase side effects, and then adds one extra check: if a relevant AWS operation is already active, it exits non-zero. The baseline is still part of the scan/await correlation model as appropriate, but the flag is not a different mode or a different observation workflow.
+
+If stronger before/after correlation is needed later, it can be added on the scan/await correlation path without changing the fact that `--assert-all-settled` is just a scan path with an additional fail-fast exit condition.
 
 ### Test coverage gap: Terragrunt-style environments
 

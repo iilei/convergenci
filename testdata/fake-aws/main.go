@@ -45,7 +45,7 @@ func scenarioName(scenario string) string {
 func scenarioState(scenario string) string {
 	switch scenario {
 	case "in-progress":
-		return delayedOutcome("in-progress", 6)
+		return "in-progress"
 	case "in-progress-then-success":
 		return delayedOutcome("in-progress-then-success", 2)
 	case "in-progress-then-failed":
@@ -65,7 +65,7 @@ func scenarioStatePath(scenario string) string {
 		name = "success"
 	}
 	name = strings.ReplaceAll(name, "-", "_")
-	return filepath.Join(os.TempDir(), "convergenci-fake-aws-state-"+name)
+	return filepath.Join(os.TempDir(), fmt.Sprintf("convergenci-fake-aws-state-%s-%d", name, os.Getpid()))
 }
 
 func delayedOutcome(scenario string, threshold int) string {

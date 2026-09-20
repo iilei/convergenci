@@ -42,6 +42,15 @@ terraform apply tfplan
 convergenci await convergence.json
 ```
 
+`scan` is the stateless plan-to-contract step: it resolves the relevant AWS
+resources from the Terraform plan and emits a convergence contract.
+
+`scan --assert-all-settled` uses the same plan-based resource resolution as plain
+`scan` and adds one preflight guard: it exits non-zero if any relevant resource
+is already in progress. It behaves like the plain scan path for resource
+selection and any scan-phase side effects, and it only adds the extra fail-fast
+check before returning.
+
 `scan --assert-all-settled` assumes the caller holds a Terraform state lock for
 the duration of `apply`, so at most one relevant change can be in flight.
 Under that assumption, correlation between an apply and its runtime effect no
@@ -101,10 +110,11 @@ Behavior:
 - resolves AWS resource names (e.g. Auto Scaling Group names) from the
   Terraform plan, using the same matching rules `scan` uses to build a
   contract — no convergence contract or explicit resource names are required
-- for each matched resource, observes AWS and fails if a relevant runtime
-  operation (an ASG instance refresh) is currently in progress
-- exits non-zero if any resource is not settled, so it can gate `terraform
-  apply` in CI
+- for each matched resource, observes AWS and exits non-zero if a relevant
+  runtime operation (an ASG instance refresh) is currently in progress
+- differs from plain `scan` only in the terminal outcome: plain `scan` emits a
+  contract, while `scan --assert-all-settled` performs a preflight assertion and
+  returns a failing exit status when any relevant resource is not settled
 - does not write a convergence contract or any other file in this mode; it is
   a point-in-time AWS check
 
