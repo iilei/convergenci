@@ -15,7 +15,7 @@ AWS answers: what actually happened?
 Convergenci answers: has the intended runtime state converged?
 
 ```mermaid
-flowchart LR
+flowchart TD
     subgraph P1["1 . plan"]
         A["terraform plan -out=tfplan"] -->|"terraform CLI"| A2["tfplan.json"]
     end
