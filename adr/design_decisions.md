@@ -529,11 +529,9 @@ Importantly, `--assert-all-settled` is not a separate baseline-aware observation
 
 If stronger before/after correlation is needed later, it can be added on the scan/await correlation path without changing the fact that `--assert-all-settled` is just a scan path with an additional fail-fast exit condition.
 
-### Test coverage gap: Terragrunt-style environments
+### Terragrunt-style environments
 
-The current fake-AWS test bench (`testdata/fake-aws`) exercises `scan`/`await` against a single Terraform plan. `--assert-all-settled` additionally needs coverage for **multi-module, Terragrunt-style layouts**, where several stacks/modules apply against overlapping or related AWS resources and locking happens per-module rather than globally.
-
-Before extending `--assert-all-settled` further, add test benches that mimic a Terragrunt environment (multiple plan files/modules, multiple ASGs, and a shared or per-module lock) so the "settled" check can be verified against realistic multi-stack scans, not just a single flat plan.
+Multi-module, Terragrunt-style layouts are covered by `stubs/terragrunt-multi-stack.json` (multiple stacks/modules with multiple ASGs) and the `fake-aws-scenarios-terragrunt` mise task, which exercises `scan`, `--assert-all-settled`, `await`, and `report` against that layout. The billable end-to-end tests additionally cover a real Terragrunt-managed stack via `mise run billable-terragrunt-test`.
 
 ---
 
