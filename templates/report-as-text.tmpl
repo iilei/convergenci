@@ -28,10 +28,10 @@ Finished at: {{ index $r "finished_at" | default "n/a" }}
 Resources:
 {{- range $r.resources }}
 {{- $obs := index . "observation" | default dict }}
-  * {{ index . "address" | default "<unknown>" }}
-    status: {{ index . "status" | default "pending" }}
-    strategy: {{ index $obs "strategy" | default "n/a" }}
-    desired: {{ if index . "desired_generation" }}{{ range $key, $value := index . "desired_generation" }}{{ $key }}={{ $value }} {{ end }}{{ else }}n/a{{ end }}
+ * {{ index . "address" | default "<unknown>" }}
+   status: {{ index . "status" | default "pending" }}
+   strategy: {{ index $obs "strategy" | default "n/a" }}
+   desired: {{ if index . "desired_generation" }}{{ range $key, $value := index . "desired_generation" }}{{ $key }}={{ $value }} {{ end }}{{ else }}n/a{{ end }}
 {{- end }}
 ---
 {{- else }}

@@ -57,6 +57,10 @@ done
 description = "Render the generated complex fake AWS report with gomplate"
 depends = [ "fake-aws-scenarios-await"]
 run = """ \
-  gomplate -d report=file://$PWD/.bench/asg-nested-module-complex-name/.convergence.convergence-report.json \
-  -f templates/report-as-text.tmpl
+for scenario in asg-custom-tag-rotation asg-nested-module-complex-name ; do
+    out_dir=\".bench/$scenario\";
+    ./convergenci report "${out_dir}/.convergence.convergence-report.json" && echo '
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+'
+done
 """
