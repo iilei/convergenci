@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"os"
 	"reflect"
 	"strconv"
@@ -10,8 +11,6 @@ import (
 	"text/template"
 	"time"
 )
-
-var logger = newLogger(false)
 
 const defaultDebugFormat = `[{{ .Level }} {{ .Timestamp }}]{{- " " -}}
 {{- if or (eq .Event "retry_started") (eq .Event "retry_satisfied") -}}
@@ -26,15 +25,26 @@ const defaultDebugFormat = `[{{ .Level }} {{ .Timestamp }}]{{- " " -}}
     source={{ .Source }} resource={{ .Resource }} status={{ .Status }} pct={{ .PercentageComplete }}
 {{- end -}}`
 
-func newLogger(enabled bool) *loggerState {
-	return &loggerState{enabled: enabled}
-}
+var logger = newLogger(false)
 
 type loggerState struct {
-	enabled    bool
 	format     *template.Template
 	rawFormat  string
+	enabled    bool
 	prefixMode bool
+}
+
+func init() {
+	ConfigureLoggerFromEnv()
+	format := strings.TrimSpace(os.Getenv("CONVERGENCI_DEBUG_FORMAT"))
+	if format == "" {
+		format = defaultDebugFormat
+	}
+	_ = ConfigureDebugFormat(format)
+}
+
+func newLogger(enabled bool) *loggerState {
+	return &loggerState{enabled: enabled}
 }
 
 func (l *loggerState) logf(format string, args ...any) {
@@ -43,14 +53,14 @@ func (l *loggerState) logf(format string, args ...any) {
 	}
 	message := fmt.Sprintf(format, args...)
 	if l.format == nil {
-		fmt.Fprintln(os.Stderr, message)
+		writeBestEffortln(os.Stderr, message)
 		return
 	}
 	if l.prefixMode {
-		fmt.Fprintf(os.Stderr, "%s %s\n", renderLogPrefix(), message)
+		writeBestEffortf(os.Stderr, "%s %s\n", renderLogPrefix(), message)
 		return
 	}
-	fmt.Fprintln(os.Stderr, message)
+	writeBestEffortln(os.Stderr, message)
 }
 
 func (l *loggerState) logLine(line string) {
@@ -61,18 +71,18 @@ func (l *loggerState) logLine(line string) {
 		return
 	}
 	if l.format == nil {
-		fmt.Fprintln(os.Stderr, line)
+		writeBestEffortln(os.Stderr, line)
 		return
 	}
 	if l.prefixMode && strings.Contains(line, "[") && strings.Contains(line, "]") {
-		fmt.Fprintln(os.Stderr, line)
+		writeBestEffortln(os.Stderr, line)
 		return
 	}
 	if l.prefixMode {
-		fmt.Fprintf(os.Stderr, "%s %s\n", renderLogPrefix(), line)
+		writeBestEffortf(os.Stderr, "%s %s\n", renderLogPrefix(), line)
 		return
 	}
-	fmt.Fprintln(os.Stderr, line)
+	writeBestEffortln(os.Stderr, line)
 }
 
 func ConfigureLogger(enabled bool) {
@@ -95,6 +105,7 @@ func ConfigureDebugFormat(raw string) error {
 		logger.prefixMode = false
 		return nil
 	}
+	// #nosec G708 -- raw is an operator-provided local CLI format, rendered with text/template and fixed functions.
 	tpl, err := template.New("debug").Funcs(template.FuncMap{
 		"join": func(separator string, values []string) string {
 			return strings.Join(values, separator)
@@ -154,9 +165,7 @@ func buildDebugTemplateData(value any) map[string]any {
 		return data
 	}
 	if m, ok := value.(map[string]any); ok {
-		for k, v := range m {
-			data[k] = v
-		}
+		maps.Copy(data, m)
 		return data
 	}
 	if m, ok := value.(map[string]string); ok {
@@ -174,7 +183,7 @@ func buildDebugTemplateData(value any) map[string]any {
 	}
 	if v.Kind() == reflect.Struct {
 		t := v.Type()
-		for i := 0; i < v.NumField(); i++ {
+		for i := range v.NumField() {
 			field := t.Field(i)
 			if field.PkgPath != "" {
 				continue
@@ -197,13 +206,4 @@ func debugFromEnv() bool {
 		return false
 	}
 	return parsed
-}
-
-func init() {
-	ConfigureLoggerFromEnv()
-	format := strings.TrimSpace(os.Getenv("CONVERGENCI_DEBUG_FORMAT"))
-	if format == "" {
-		format = defaultDebugFormat
-	}
-	_ = ConfigureDebugFormat(format)
 }

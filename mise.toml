@@ -4,10 +4,11 @@ gomplate = "latest"
 terraform = "1.16.3"
 terragrunt = "1.1.5"
 golangci-lint = "2.13.2"
+gofumpt = "0.12.0"
 
 [tasks.fmt]
 description = "Format Go sources"
-run = "gofmt -w ."
+run = "gofumpt -w ."
 
 [tasks.vet]
 description = "Run Go vet"
@@ -25,7 +26,7 @@ run = "export CONVERGENCI_AWS_CLI_PATH=\"$PWD/testdata/fake-aws-bin/aws\" && go 
 [tasks.check]
 depends = ["build-fake-aws"]
 description = "Format, vet, and test the Go project"
-run = "gofmt -w . && go vet ./... && export CONVERGENCI_AWS_CLI_PATH=\"$PWD/testdata/fake-aws-bin/aws\" && go test ./..."
+run = "gofumpt -w . && go vet ./... && export CONVERGENCI_AWS_CLI_PATH=\"$PWD/testdata/fake-aws-bin/aws\" && go test ./..."
 
 [tasks.build]
 description = "Build the convergenci binary"

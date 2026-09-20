@@ -1,3 +1,4 @@
+// Package scan extracts convergence contracts from Terraform plans.
 package scan
 
 import (
@@ -7,6 +8,22 @@ import (
 	"strings"
 )
 
+const contractSchemaVersion = 2
+
+// ASGDefaultPolicy is the built-in policy for the current ASG instance refresh implementation.
+var ASGDefaultPolicy = RecordPolicy{
+	Name:         "asg",
+	ResourceType: "aws_autoscaling_group",
+	DefaultRegex: `(?i).*aws_autoscaling_group.*`,
+	DefaultPaths: []string{
+		"tag.rotation",
+		"tag.convergenci_rotation",
+		"launch_template.version",
+		"mixed_instances_policy.launch_template.launch_template_specification.version",
+		"mixed_instances_policy.launch_template.version",
+	},
+}
+
 // TerraformPlan is the minimal Terraform JSON plan shape required by the ASG scan implementation.
 type TerraformPlan struct {
 	ResourceChanges []ResourceChange `json:"resource_changes"`
@@ -14,9 +31,9 @@ type TerraformPlan struct {
 
 // ResourceChange is a single Terraform resource change entry.
 type ResourceChange struct {
+	Change  Change `json:"change"`
 	Address string `json:"address"`
 	Type    string `json:"type"`
-	Change  Change `json:"change"`
 }
 
 // Change contains the before/after values for the resource.
@@ -33,41 +50,27 @@ type RecordPolicy struct {
 	DefaultPaths []string
 }
 
-// ASGDefaultPolicy is the built-in policy for the current ASG instance refresh implementation.
-var ASGDefaultPolicy = RecordPolicy{
-	Name:         "asg",
-	ResourceType: "aws_autoscaling_group",
-	DefaultRegex: `(?i).*aws_autoscaling_group.*`,
-	DefaultPaths: []string{
-		"tag.rotation",
-		"tag.convergenci_rotation",
-		"launch_template.version",
-		"mixed_instances_policy.launch_template.launch_template_specification.version",
-		"mixed_instances_policy.launch_template.version",
-	},
-}
-
 // Contract is the generated convergence contract written by the scan command.
 type Contract struct {
-	SchemaVersion int            `json:"schema_version"`
 	Resources     []ContractItem `json:"resources"`
+	SchemaVersion int            `json:"schema_version"`
 }
 
 // ContractItem is a single resource expectation in the convergence contract.
 type ContractItem struct {
+	Observation       Observation             `json:"observation"`
 	Address           string                  `json:"address"`
 	Kind              string                  `json:"kind"`
 	Name              string                  `json:"name,omitempty"`
 	Status            string                  `json:"status,omitempty"`
 	DesiredGeneration []GenerationRequirement `json:"desired_generation"`
-	Observation       Observation             `json:"observation"`
 }
 
 // GenerationRequirement identifies one desired runtime generation factor.
 type GenerationRequirement struct {
+	Value any    `json:"value"`
 	Type  string `json:"type"`
 	Key   string `json:"key"`
-	Value any    `json:"value"`
 }
 
 // Observation captures the AWS runtime strategy expected for the resource.
@@ -79,6 +82,7 @@ type Observation struct {
 
 // LoadPlan reads a Terraform plan JSON file from disk.
 func LoadPlan(path string) (TerraformPlan, error) {
+	// #nosec G304 -- path is the Terraform plan explicitly selected by the CLI user.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return TerraformPlan{}, err
@@ -110,7 +114,7 @@ func BuildContract(
 	paths := append([]string{}, policy.DefaultPaths...)
 	paths = append(paths, extraIndicators...)
 
-	contract := Contract{SchemaVersion: 2}
+	contract := Contract{SchemaVersion: contractSchemaVersion}
 	for _, change := range plan.ResourceChanges {
 		if change.Type != policy.ResourceType {
 			continue
@@ -239,7 +243,7 @@ func nestedValue(obj map[string]any, path string) (any, bool) {
 		return nil, false
 	}
 	curr := any(obj)
-	for _, part := range strings.Split(path, ".") {
+	for part := range strings.SplitSeq(path, ".") {
 		if object, ok := curr.(map[string]any); ok {
 			next, exists := object[part]
 			if !exists {
@@ -252,25 +256,8 @@ func nestedValue(obj map[string]any, path string) (any, bool) {
 		if !ok {
 			return nil, false
 		}
-		found := false
-		for _, item := range list {
-			object, objectOK := item.(map[string]any)
-			if !objectOK {
-				continue
-			}
-			key, keyOK := object["key"].(string)
-			if keyOK && key == part {
-				curr = object["value"]
-				found = true
-				break
-			}
-			if next, exists := object[part]; exists {
-				curr = next
-				found = true
-				break
-			}
-		}
-		if !found {
+		curr, ok = nestedListValue(list, part)
+		if !ok {
 			return nil, false
 		}
 	}
@@ -282,4 +269,20 @@ func nestedValue(obj map[string]any, path string) (any, bool) {
 		return nil, false
 	}
 	return curr, true
+}
+
+func nestedListValue(list []any, part string) (any, bool) {
+	for _, item := range list {
+		object, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if key, ok := object["key"].(string); ok && key == part {
+			return object["value"], true
+		}
+		if value, ok := object[part]; ok {
+			return value, true
+		}
+	}
+	return nil, false
 }

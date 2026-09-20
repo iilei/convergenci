@@ -3,10 +3,31 @@ package cli
 
 import (
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"strings"
+)
+
+const (
+	generatedDirectoryMode = 0o750
+	generatedFileMode      = 0o600
+	defaultAWSExecutable   = "aws"
+	shortHelpFlag          = "-h"
+	longHelpFlag           = "--help"
+	boolStringTrue         = "true"
+	boolStringFalse        = "false"
+	statusConverged        = "converged"
+	statusFailed           = "failed"
+	statusPending          = "pending"
+	statusTimeout          = "timeout"
+	awsStatusInProgress    = "INPROGRESS"
+	debugFieldEvent        = "Event"
+	debugFieldIteration    = "RetryIteration"
+	debugFieldLimit        = "RetryLimit"
+	debugFieldElapsed      = "Elapsed"
+	debugFieldStatus       = "Status"
+	debugFieldSource       = "Source"
+	debugFieldResource     = "Resource"
 )
 
 // Version contains build metadata for the CLI.
@@ -18,10 +39,10 @@ type Version struct {
 
 // Command is the root CLI command.
 type Command struct {
-	version Version
 	out     io.Writer
 	errOut  io.Writer
 	fs      *flag.FlagSet
+	version Version
 }
 
 // NewRootCommand returns a root command configured with build metadata.
@@ -33,36 +54,6 @@ func NewRootCommand(v Version) *Command {
 	}
 	c.initFlagSet()
 	return c
-}
-
-func (c *Command) initFlagSet() {
-	debugDefault := debugFromEnv()
-
-	fs := flag.NewFlagSet("convergenci", flag.ContinueOnError)
-	fs.SetOutput(c.errOut)
-	fs.Bool("version", false, "show version information and exit")
-	fs.Bool("v", false, "show version information and exit")
-	fs.Bool("debug", debugDefault, "enable debug logging")
-	fs.Usage = func() {
-		fmt.Fprintf(c.out, "Usage: convergenci [flags] [command]\n\n")
-		fmt.Fprintf(c.out, "Commands:\n")
-		fmt.Fprintf(c.out, "  version        Show version information\n")
-		fmt.Fprintf(c.out, "  scan           Scan a Terraform plan and emit a convergence contract\n")
-		fmt.Fprintf(c.out, "  await          Wait for the runtime state in a convergence contract to converge\n")
-		fmt.Fprintf(c.out, "  report         Render a convergence report file as human-readable text\n")
-		fmt.Fprintf(c.out, "  doctor         Check AWS CLI availability and render a human-friendly report\n\n")
-		fmt.Fprintf(c.out, "Examples:\n")
-		fmt.Fprintf(c.out, "  convergenci scan <tfplan.json>\n")
-		fmt.Fprintf(c.out, "  convergenci scan --assert-all-settled <tfplan.json>\n")
-		fmt.Fprintf(c.out, "  convergenci await <convergence.json>\n")
-		fmt.Fprintf(c.out, "  convergenci report <convergence-report.json>\n")
-		fmt.Fprintf(c.out, "  convergenci doctor ./artifacts/report.json\n\n")
-		fmt.Fprintf(c.out, "Flags:\n")
-		fmt.Fprintf(c.out, "  -v, --version  Show version information and exit\n")
-		fmt.Fprintf(c.out, "  --debug       Enable debug logging\n")
-		fmt.Fprintf(c.out, "  -h, --help     Show help\n")
-	}
-	c.fs = fs
 }
 
 // SetOut sets the writer used for normal command output.
@@ -86,33 +77,38 @@ func (c *Command) Execute() error {
 	return c.ExecuteArgs(os.Args[1:])
 }
 
-// ExecuteArgs executes the root command with the provided arguments.
 func parseFlagsWithPositionals(fs *flag.FlagSet, args []string) ([]string, error) {
 	flagArgs := make([]string, 0, len(args))
 	positionals := make([]string, 0, len(args))
 
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
+	for len(args) > 0 {
+		arg := args[0]
+		args = args[1:]
 		if arg == "--" {
-			positionals = append(positionals, args[i+1:]...)
+			positionals = append(positionals, args...)
 			break
 		}
-		if strings.HasPrefix(arg, "-") {
-			flagArgs = append(flagArgs, arg)
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				name := strings.TrimLeft(arg, "-")
-				if name == "" {
-					continue
-				}
-				if f := fs.Lookup(name); f != nil && f.Value.String() == "false" && f.DefValue == "false" {
-					continue
-				}
-				flagArgs = append(flagArgs, args[i+1])
-				i++
-			}
+		if !strings.HasPrefix(arg, "-") {
+			positionals = append(positionals, arg)
 			continue
 		}
-		positionals = append(positionals, arg)
+		flagArgs = append(flagArgs, arg)
+		if len(args) == 0 {
+			continue
+		}
+		nextArg := args[0]
+		if strings.HasPrefix(nextArg, "-") {
+			continue
+		}
+		name := strings.TrimLeft(arg, "-")
+		if name == "" {
+			continue
+		}
+		if f := fs.Lookup(name); f != nil && f.Value.String() == boolStringFalse && f.DefValue == boolStringFalse {
+			continue
+		}
+		flagArgs = append(flagArgs, nextArg)
+		args = args[1:]
 	}
 
 	if len(flagArgs) > 0 {
@@ -124,9 +120,10 @@ func parseFlagsWithPositionals(fs *flag.FlagSet, args []string) ([]string, error
 }
 
 func hasRootHelpFlag(args []string) bool {
-	return len(args) > 0 && (args[0] == "-h" || args[0] == "--help")
+	return len(args) > 0 && (args[0] == shortHelpFlag || args[0] == longHelpFlag)
 }
 
+// ExecuteArgs executes the root command with the provided arguments.
 func (c *Command) ExecuteArgs(args []string) error {
 	if c.fs == nil {
 		c.initFlagSet()
@@ -161,16 +158,16 @@ func (c *Command) ExecuteArgs(args []string) error {
 	}
 
 	if c.fs.Lookup("debug") != nil {
-		ConfigureLogger(c.fs.Lookup("debug").Value.String() == "true")
+		ConfigureLogger(c.fs.Lookup("debug").Value.String() == boolStringTrue)
 	}
 
-	if c.fs.Lookup("version").Value.String() == "true" || c.fs.Lookup("v").Value.String() == "true" {
+	if c.fs.Lookup("version").Value.String() == boolStringTrue || c.fs.Lookup("v").Value.String() == boolStringTrue {
 		c.printVersion()
 		return nil
 	}
 
 	if c.fs.NArg() > 0 {
-		fmt.Fprintf(c.errOut, "unknown command: %s\n", c.fs.Arg(0))
+		writeBestEffortf(c.errOut, "unknown command: %s\n", c.fs.Arg(0))
 		c.fs.Usage()
 		return nil
 	}
@@ -179,14 +176,44 @@ func (c *Command) ExecuteArgs(args []string) error {
 	return nil
 }
 
+func (c *Command) initFlagSet() {
+	debugDefault := debugFromEnv()
+
+	fs := flag.NewFlagSet("convergenci", flag.ContinueOnError)
+	fs.SetOutput(c.errOut)
+	fs.Bool("version", false, "show version information and exit")
+	fs.Bool("v", false, "show version information and exit")
+	fs.Bool("debug", debugDefault, "enable debug logging")
+	fs.Usage = func() {
+		writeBestEffortf(c.out, "Usage: convergenci [flags] [command]\n\n")
+		writeBestEffortf(c.out, "Commands:\n")
+		writeBestEffortf(c.out, "  version        Show version information\n")
+		writeBestEffortf(c.out, "  scan           Scan a Terraform plan and emit a convergence contract\n")
+		writeBestEffortf(c.out, "  await          Wait for the runtime state in a convergence contract to converge\n")
+		writeBestEffortf(c.out, "  report         Render a convergence report file as human-readable text\n")
+		writeBestEffortf(c.out, "  doctor         Check AWS CLI availability and render a human-friendly report\n\n")
+		writeBestEffortf(c.out, "Examples:\n")
+		writeBestEffortf(c.out, "  convergenci scan <tfplan.json>\n")
+		writeBestEffortf(c.out, "  convergenci scan --assert-all-settled <tfplan.json>\n")
+		writeBestEffortf(c.out, "  convergenci await <convergence.json>\n")
+		writeBestEffortf(c.out, "  convergenci report <convergence-report.json>\n")
+		writeBestEffortf(c.out, "  convergenci doctor ./artifacts/report.json\n\n")
+		writeBestEffortf(c.out, "Flags:\n")
+		writeBestEffortf(c.out, "  -v, --version  Show version information and exit\n")
+		writeBestEffortf(c.out, "  --debug       Enable debug logging\n")
+		writeBestEffortf(c.out, "  -h, --help     Show help\n")
+	}
+	c.fs = fs
+}
+
 func (c *Command) printVersion() {
 	if c.version.Version == "" {
-		fmt.Fprintln(c.out, "dev")
+		writeBestEffortln(c.out, "dev")
 		return
 	}
 	if c.version.Commit == "" || c.version.Commit == "none" {
-		fmt.Fprintf(c.out, "%s\n", c.version.Version)
+		writeBestEffortf(c.out, "%s\n", c.version.Version)
 		return
 	}
-	fmt.Fprintf(c.out, "%s (commit: %s, built at: %s)\n", c.version.Version, c.version.Commit, c.version.Date)
+	writeBestEffortf(c.out, "%s (commit: %s, built at: %s)\n", c.version.Version, c.version.Commit, c.version.Date)
 }

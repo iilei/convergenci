@@ -64,7 +64,7 @@ It does not currently include:
 terraform plan -out=tfplan
 terraform show -json tfplan > tfplan.json
 
-convergenci scan tfplan.json > convergence.json
+convergenci scan --output-json convergence.json tfplan.json
 
 convergenci scan --assert-all-settled tfplan.json
 
@@ -131,6 +131,23 @@ reported as expected:
 mise run billable-terraform-test-timeout
 ```
 
+The live-test controls are:
+
+- `CONVERGENCI_LIVE_INSTANCE_WARMUP_SECONDS`: ASG instance-refresh warmup;
+  defaults to `1`
+- `CONVERGENCI_LIVE_AWAIT_TIMEOUT`: maximum time passed to `await`; defaults to
+  `5m`
+- `CONVERGENCI_LIVE_AWAIT_INTERVAL`: polling interval passed to `await`;
+  defaults to `5s`
+- `CONVERGENCI_LIVE_EXPECT_TIMEOUT`: when `true`, the harness succeeds only if
+  `await` exits with timeout code `230`
+
+The dedicated timeout task fixes warmup at `30` seconds and timeout at `5`
+seconds. Seeing one `Pending` observation followed by exit code `230` is its
+expected success condition, not a failed convergence test. Use
+`billable-terraform-test` or `billable-terragrunt-test` when the expected result
+is convergence.
+
 Run the Terragrunt variant with:
 
 ```bash
@@ -145,6 +162,12 @@ Every resource receives a unique `convergenci-test-id` tag. Cleanup is installed
 as an exit trap and runs Terraform or Terragrunt destroy even when the test
 fails or is interrupted. A failed process should still be checked manually in
 the AWS console before the sandbox is reused.
+
+`AWS_PROFILE` and the other standard AWS credential variables are inherited by
+the AWS CLI subprocess. Debug output such as `profile=""` means no explicit
+`--aws-profile-name` option was supplied; it does not mean that `AWS_PROFILE`
+was ignored. Use `--aws-profile-name` only when an explicit per-command profile
+override is desired.
 
 `scan` is the stateless plan-to-contract step: it resolves the relevant AWS
 resources from the Terraform plan and emits a convergence contract.
@@ -273,6 +296,9 @@ Behavior:
 - supports timeout and polling interval overrides through environment variables:
   - `CONVERGENCI_AWAIT_TIMEOUT`
   - `CONVERGENCI_AWAIT_INTERVAL`
+- contracts currently emitted by `scan` use `schema_version: 2`; `await` does
+  not negotiate schema compatibility, so regenerate the plan and contract
+  after upgrading rather than reusing an artifact created by another version
 
 Example:
 
@@ -296,12 +322,53 @@ Behavior:
   required
 - reads the JSON report given as a positional argument and prints the
   rendered text to stdout
+- enables ANSI colors automatically only when stdout is an interactive terminal
+  and `NO_COLOR` is unset
+- `CONVERGENCI_COLOR=always` (or `true`) forces color, overriding automatic
+  detection; `CONVERGENCI_COLOR=never` (or `false`) disables it
 
 Example:
 
 ```bash
 convergenci report ./artifacts/asg-plan.convergence-report.json
 ```
+
+#### `doctor`
+
+Check AWS CLI availability and caller identity, and optionally render a report
+with a filesystem template.
+
+```bash
+convergenci doctor [--template PATH] [--aws-cli-path PATH] [--aws-profile-name NAME] [report.json]
+```
+
+Without a report argument, `doctor` verifies that the AWS CLI can run and that
+`sts get-caller-identity` succeeds. With a report argument, it additionally
+renders that JSON file using `--template`; the default path is
+`templates/report-as-text.tmpl` relative to the current working directory.
+Unlike `report`, this template is read from the filesystem rather than embedded
+in the binary.
+
+Example:
+
+```bash
+convergenci doctor
+convergenci doctor --template ./templates/report-as-text.tmpl ./artifacts/asg-plan.convergence-report.json
+```
+
+### Exit codes
+
+Commands return `0` on success. Structured CLI failures use these exit codes:
+
+| Code | Meaning |
+| ---: | --- |
+| `201` | convergence contract exceeds the supported resource limit |
+| `210` | invalid command configuration or arguments |
+| `220` | input/output or artifact error |
+| `230` | convergence timeout |
+| `240` | convergence, AWS observation, rendering, or other operational failure |
+
+The billable timeout task explicitly treats `230` as its expected outcome.
 
 ## End-to-end example
 
@@ -436,6 +503,21 @@ The CLI version output follows:
 ```text
 1.2.3 (commit: abc123, built at: 2026-09-19)
 ```
+
+## Development checks
+
+Install the pinned tools and run both project validation tasks before opening a
+change:
+
+```bash
+mise install
+mise run check
+mise run lint
+```
+
+`mise run check` formats with the pinned `gofumpt`, runs `go vet`, builds the
+fake AWS CLI, and executes the Go tests. Linting is a separate task and is not
+included in `check`.
 
 ## Notes
 

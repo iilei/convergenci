@@ -13,15 +13,27 @@ import (
 	"github.com/iilei/convergenci-cli/templates"
 )
 
+const (
+	templateDictPairWidth = 2
+
+	ansiReset   = "\033[0m"
+	ansiBold    = "\033[1m"
+	ansiRed     = "\033[31m"
+	ansiGreen   = "\033[32m"
+	ansiYellow  = "\033[33m"
+	ansiCyan    = "\033[36m"
+	ansiMagenta = "\033[35m"
+)
+
 // colorEnabled reports whether ANSI color codes should be emitted in report output.
 // CONVERGENCI_COLOR=always/true forces color on and never/false forces it off; otherwise
 // color is enabled only when NO_COLOR (https://no-color.org) is unset and stdout is an
 // interactive terminal, so piped or redirected output (files, CI logs) stays plain by default.
 func colorEnabled() bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("CONVERGENCI_COLOR"))) {
-	case "always", "true":
+	case "always", boolStringTrue:
 		return true
-	case "never", "false":
+	case "never", boolStringFalse:
 		return false
 	}
 	if strings.TrimSpace(os.Getenv("NO_COLOR")) != "" {
@@ -33,16 +45,6 @@ func colorEnabled() bool {
 	}
 	return info.Mode()&os.ModeCharDevice != 0
 }
-
-const (
-	ansiReset   = "\033[0m"
-	ansiBold    = "\033[1m"
-	ansiRed     = "\033[31m"
-	ansiGreen   = "\033[32m"
-	ansiYellow  = "\033[33m"
-	ansiCyan    = "\033[36m"
-	ansiMagenta = "\033[35m"
-)
 
 // colorize wraps text in the given ANSI code, unless color output is disabled.
 func colorize(code, text string) string {
@@ -67,8 +69,8 @@ func reportTemplateFuncs(report map[string]any) template.FuncMap {
 			return val
 		},
 		"dict": func(pairs ...any) map[string]any {
-			result := make(map[string]any, len(pairs)/2)
-			for i := 0; i+1 < len(pairs); i += 2 {
+			result := make(map[string]any, len(pairs)/templateDictPairWidth)
+			for i := 0; i+1 < len(pairs); i += templateDictPairWidth {
 				key, ok := pairs[i].(string)
 				if !ok {
 					continue
@@ -84,11 +86,11 @@ func reportTemplateFuncs(report map[string]any) template.FuncMap {
 		"bold":   func(text string) string { return colorize(ansiBold, text) },
 		"statusColor": func(status string) string {
 			switch strings.ToLower(strings.TrimSpace(status)) {
-			case "converged", "successful":
+			case statusConverged, "successful":
 				return colorize(ansiGreen, status)
-			case "pending":
+			case statusPending:
 				return colorize(ansiYellow, status)
-			case "failed", "timeout":
+			case statusFailed, statusTimeout:
 				return colorize(ansiRed, status)
 			case "inprogress", "in-progress", "in_progress":
 				return colorize(ansiCyan, status)
@@ -111,7 +113,7 @@ func reportTemplateFuncs(report map[string]any) template.FuncMap {
 // isSuccessStatus reports whether a resource/report status counts as successful.
 func isSuccessStatus(status string) bool {
 	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "converged", "successful":
+	case statusConverged, "successful":
 		return true
 	default:
 		return false
@@ -145,7 +147,7 @@ func isEmptyValue(val any) bool {
 	switch v.Kind() {
 	case reflect.String, reflect.Slice, reflect.Map, reflect.Array:
 		return v.Len() == 0
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		return v.IsNil()
 	default:
 		return v.IsZero()
@@ -156,14 +158,14 @@ func (c *Command) executeReport(args []string) error {
 	fs := flag.NewFlagSet("convergenci report", flag.ContinueOnError)
 	fs.SetOutput(c.out)
 	fs.Usage = func() {
-		fmt.Fprintf(c.out, "Usage: convergenci report <report.json>\n\n")
-		fmt.Fprintf(c.out, "Render a convergence report file as human-readable text using the\n")
-		fmt.Fprintf(c.out, "built-in report template, without requiring gomplate.\n\n")
-		fmt.Fprintf(c.out, "Flags:\n")
-		fmt.Fprintf(c.out, "  -h, --help    Show help\n")
+		writeBestEffortf(c.out, "Usage: convergenci report <report.json>\n\n")
+		writeBestEffortf(c.out, "Render a convergence report file as human-readable text using the\n")
+		writeBestEffortf(c.out, "built-in report template, without requiring gomplate.\n\n")
+		writeBestEffortf(c.out, "Flags:\n")
+		writeBestEffortf(c.out, "  -h, --help    Show help\n")
 	}
 
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+	if len(args) > 0 && (args[0] == shortHelpFlag || args[0] == longHelpFlag) {
 		fs.Usage()
 		return nil
 	}
@@ -176,6 +178,7 @@ func (c *Command) executeReport(args []string) error {
 	}
 
 	reportPath := positionals[0]
+	// #nosec G304 G703 -- reportPath is the report file explicitly selected by the CLI user.
 	data, err := os.ReadFile(reportPath)
 	if err != nil {
 		return &ExitCodeError{Code: codeIOError, Message: fmt.Sprintf("unable to read report file: %v", err)}

@@ -1,9 +1,16 @@
+// Package awscmd runs AWS CLI commands with shared execution settings.
 package awscmd
 
 import (
+	"context"
 	"flag"
 	"os"
 	"os/exec"
+)
+
+const (
+	awsCLIPathEnv           = "CONVERGENCI_AWS_CLI_PATH"
+	awsProfileArgumentCount = 2
 )
 
 // Config is the thin execution configuration shared by scan and await.
@@ -11,8 +18,6 @@ type Config struct {
 	BinaryPath string
 	Profile    string
 }
-
-const awsCLIPathEnv = "CONVERGENCI_AWS_CLI_PATH"
 
 func defaultAWSCLIPath() string {
 	if path := os.Getenv(awsCLIPathEnv); path != "" {
@@ -27,9 +32,9 @@ func DefaultConfig() Config {
 }
 
 // RegisterFlags adds the shared AWS CLI flags and returns the configured values.
-func RegisterFlags(fs *flag.FlagSet) (binaryPath, profileName *string) {
-	binaryPath = fs.String("aws-cli-path", "aws", "path to the AWS CLI binary")
-	profileName = fs.String("aws-profile-name", "", "AWS profile name to use for AWS CLI calls")
+func RegisterFlags(fs *flag.FlagSet) (*string, *string) {
+	binaryPath := fs.String("aws-cli-path", "aws", "path to the AWS CLI binary")
+	profileName := fs.String("aws-profile-name", "", "AWS profile name to use for AWS CLI calls")
 	return binaryPath, profileName
 }
 
@@ -41,7 +46,7 @@ func UsageText() string {
 
 // Args builds the AWS CLI arguments with any explicit profile override.
 func (c Config) Args(service string, args ...string) []string {
-	cmdArgs := make([]string, 0, 2+len(args))
+	cmdArgs := make([]string, 0, awsProfileArgumentCount+len(args))
 	if c.Profile != "" {
 		cmdArgs = append(cmdArgs, "--profile", c.Profile)
 	}
@@ -58,7 +63,8 @@ func (c Config) Run(service string, args ...string) ([]byte, error) {
 	}
 
 	cmdArgs := c.Args(service, args...)
-	cmd := exec.Command(path, cmdArgs...)
+	// #nosec G204 -- BinaryPath is an explicit CLI option for selecting the installed AWS CLI.
+	cmd := exec.CommandContext(context.Background(), path, cmdArgs...)
 	cmd.Env = os.Environ()
 	return cmd.Output()
 }

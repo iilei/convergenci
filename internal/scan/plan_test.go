@@ -250,9 +250,9 @@ func TestNestedValue(t *testing.T) {
 	}
 
 	tests := []struct {
+		want any
 		name string
 		path string
-		want any
 		ok   bool
 	}{
 		{name: "nested object", path: "nested.value", want: "found", ok: true},

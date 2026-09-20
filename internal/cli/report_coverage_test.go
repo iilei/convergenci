@@ -7,8 +7,8 @@ func TestIsEmptyValue(t *testing.T) {
 	nilPointer := (*int)(nil)
 	nonNilPointer := &value
 	tests := []struct {
-		name  string
 		value any
+		name  string
 		want  bool
 	}{
 		{name: "nil", value: nil, want: true},

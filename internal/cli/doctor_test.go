@@ -72,8 +72,8 @@ func TestDoctorCommandRejectsInvalidReportInputs(t *testing.T) {
 	awsPath := fakeAWSCLIPath(t)
 	tests := []struct {
 		name string
-		args []string
 		want string
+		args []string
 	}{
 		{
 			name: "empty template path",

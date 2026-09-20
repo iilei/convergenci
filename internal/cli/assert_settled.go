@@ -24,7 +24,7 @@ func asgInstanceRefreshInProgress(asgName string, cfg awscmd.Config) (bool, erro
 	}
 	for _, refresh := range payload.InstanceRefreshes {
 		switch strings.ToUpper(refresh.Status) {
-		case "INPROGRESS", "PENDING":
+		case awsStatusInProgress, "PENDING":
 			return true, nil
 		}
 	}

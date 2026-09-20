@@ -44,22 +44,25 @@ func (c *Command) executeScan(args []string) error {
 	)
 	awsCLIPath, awsProfileName := awscmd.RegisterFlags(fs)
 	fs.Usage = func() {
-		fmt.Fprintf(c.out, "Usage: convergenci scan <tfplan.json>\n")
-		fmt.Fprintf(c.out, "       convergenci scan --assert-all-settled <tfplan.json>\n\n")
-		fmt.Fprintf(c.out, "Scan a Terraform plan and emit a convergence contract.\n\n")
-		fmt.Fprintf(c.out, "Flags:\n")
-		fmt.Fprintf(c.out, "  --output-json PATH    Write the generated convergence contract to a JSON file at PATH\n")
-		fmt.Fprintf(c.out, "  --jsonlines           Write the generated convergence contract as JSON Lines\n")
-		fmt.Fprintf(c.out, "  --force              Overwrite an existing output file\n")
-		fmt.Fprintf(
+		writeBestEffortf(c.out, "Usage: convergenci scan <tfplan.json>\n")
+		writeBestEffortf(c.out, "       convergenci scan --assert-all-settled <tfplan.json>\n\n")
+		writeBestEffortf(c.out, "Scan a Terraform plan and emit a convergence contract.\n\n")
+		writeBestEffortf(c.out, "Flags:\n")
+		writeBestEffortf(
 			c.out,
-			"  --assert-all-settled Assert nothing relevant is currently converging for the plan's resources\n",
+			"  --output-json PATH    Write the generated convergence contract to a JSON file at PATH\n",
 		)
-		fmt.Fprint(c.out, awscmd.UsageText())
-		fmt.Fprintf(c.out, "  -h, --help            Show help\n")
+		writeBestEffortf(c.out, "  --jsonlines           Write the generated convergence contract as JSON Lines\n")
+		writeBestEffortf(c.out, "  --force              Overwrite an existing output file\n")
+		writeBestEffortf(
+			c.out,
+			"  --assert-all-settled Assert nothing relevant is currently converging for the plan's resources\n")
+
+		writeBestEffort(c.out, awscmd.UsageText())
+		writeBestEffortf(c.out, "  -h, --help            Show help\n")
 	}
 
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+	if len(args) > 0 && (args[0] == shortHelpFlag || args[0] == longHelpFlag) {
 		fs.Usage()
 		return nil
 	}
@@ -68,18 +71,7 @@ func (c *Command) executeScan(args []string) error {
 		return err
 	}
 
-	cmdCfg := awscmd.DefaultConfig()
-	if *awsCLIPath != "aws" {
-		cmdCfg.BinaryPath = *awsCLIPath
-		fmt.Fprintf(c.out, "aws-cli-path: %s\n", *awsCLIPath)
-	}
-	if *awsProfileName != "" {
-		cmdCfg.Profile = *awsProfileName
-		fmt.Fprintf(c.out, "aws-profile-name: %s\n", *awsProfileName)
-	}
-	if DebugEnabled() {
-		Debugf("aws command config: binary=%s profile=%q", cmdCfg.BinaryPath, cmdCfg.Profile)
-	}
+	cmdCfg := c.commandAWSConfig(*awsCLIPath, *awsProfileName)
 
 	if *assertAllSettled {
 		if len(positionals) == 0 {
@@ -96,9 +88,9 @@ func (c *Command) executeScan(args []string) error {
 			path = defaultScanOutputPath("", *jsonlines)
 		}
 	}
-	fmt.Fprintf(c.out, "output-json: %s\n", path)
+	writeBestEffortf(c.out, "output-json: %s\n", path)
 	if *jsonlines {
-		fmt.Fprintln(c.out, "jsonlines: true")
+		writeBestEffortln(c.out, "jsonlines: true")
 	}
 
 	if len(positionals) == 0 {
@@ -107,7 +99,7 @@ func (c *Command) executeScan(args []string) error {
 
 	planPath := positionals[0]
 	if len(positionals) > 1 {
-		fmt.Fprintf(c.errOut, "terraform plan input: %s\n", positionals[0])
+		writeBestEffortf(c.errOut, "terraform plan input: %s\n", positionals[0])
 	}
 	plan, err := scan.LoadPlan(planPath)
 	if err != nil {
@@ -123,6 +115,22 @@ func (c *Command) executeScan(args []string) error {
 	return nil
 }
 
+func (c *Command) commandAWSConfig(binaryPath, profileName string) awscmd.Config {
+	cmdCfg := awscmd.DefaultConfig()
+	if binaryPath != defaultAWSExecutable {
+		cmdCfg.BinaryPath = binaryPath
+		writeBestEffortf(c.out, "aws-cli-path: %s\n", binaryPath)
+	}
+	if profileName != "" {
+		cmdCfg.Profile = profileName
+		writeBestEffortf(c.out, "aws-profile-name: %s\n", profileName)
+	}
+	if DebugEnabled() {
+		Debugf("aws command config: binary=%s profile=%q", cmdCfg.BinaryPath, cmdCfg.Profile)
+	}
+	return cmdCfg
+}
+
 // executeScanAssertAllSettled resolves AWS resource names from the plan using the same
 // matching rules as BuildContract, then asserts none of them are currently converging.
 func (c *Command) executeScanAssertAllSettled(planPath string, cmdCfg awscmd.Config) error {
@@ -135,7 +143,7 @@ func (c *Command) executeScanAssertAllSettled(planPath string, cmdCfg awscmd.Con
 		return &ExitCodeError{Code: codeConfigError, Message: err.Error()}
 	}
 	if len(names) == 0 {
-		fmt.Fprintln(c.out, "no matching resources in plan")
+		writeBestEffortln(c.out, "no matching resources in plan")
 		return nil
 	}
 
@@ -152,11 +160,11 @@ func (c *Command) executeScanAssertAllSettled(planPath string, cmdCfg awscmd.Con
 	if len(notSettled) > 0 {
 		return &ExitCodeError{
 			Code:    codeGenericFailure,
-			Message: fmt.Sprintf("not settled: %s", strings.Join(notSettled, ", ")),
+			Message: "not settled: " + strings.Join(notSettled, ", "),
 		}
 	}
 
-	fmt.Fprintln(c.out, "all resources settled")
+	writeBestEffortln(c.out, "all resources settled")
 	return nil
 }
 
@@ -169,12 +177,8 @@ func safeOutputFilePath(path string, force bool) (string, error) {
 		return "", fmt.Errorf("invalid output path: %q", path)
 	}
 	if filepath.IsAbs(cleaned) {
-		if !force {
-			if _, err := os.Stat(cleaned); err == nil {
-				return "", fmt.Errorf("refusing to overwrite existing file: %s", cleaned)
-			} else if !os.IsNotExist(err) {
-				return "", err
-			}
+		if err := ensureOutputAvailable(cleaned, force); err != nil {
+			return "", err
 		}
 		return cleaned, nil
 	}
@@ -193,22 +197,30 @@ func safeOutputFilePath(path string, force bool) (string, error) {
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("refusing to write outside the working directory: %q", path)
 	}
-	if !force {
-		if _, err := os.Stat(absPath); err == nil {
-			return "", fmt.Errorf("refusing to overwrite existing file: %s", absPath)
-		} else if !os.IsNotExist(err) {
-			return "", err
-		}
+	if err := ensureOutputAvailable(absPath, force); err != nil {
+		return "", err
 	}
 	return cleaned, nil
+}
+
+func ensureOutputAvailable(path string, force bool) error {
+	if force {
+		return nil
+	}
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("refusing to overwrite existing file: %s", path)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 func writeScanArtifact(path string, contract scan.Contract, jsonlines, force bool) error {
 	var data []byte
 	var err error
 	if jsonlines {
-		for _, item := range contract.Resources {
-			entry, err := json.Marshal(item)
+		for i := range contract.Resources {
+			entry, err := json.Marshal(&contract.Resources[i])
 			if err != nil {
 				return err
 			}
@@ -235,10 +247,12 @@ func writeScanArtifact(path string, contract scan.Contract, jsonlines, force boo
 		}
 	}
 	if dir := filepath.Dir(resolved); dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		// #nosec G703 -- dir is derived from the user-selected output validated by safeOutputFilePath.
+		if err := os.MkdirAll(dir, generatedDirectoryMode); err != nil {
 			return err
 		}
 	}
 
-	return os.WriteFile(resolved, data, 0o644)
+	// #nosec G703 -- resolved is the user-selected output validated by safeOutputFilePath.
+	return os.WriteFile(resolved, data, generatedFileMode)
 }

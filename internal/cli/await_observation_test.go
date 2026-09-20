@@ -26,7 +26,7 @@ func TestObserveAWSResourceWithoutStrategyUsesContractStatus(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			item := scan.ContractItem{Address: "asg.example", Status: test.status}
-			got, arn, err := observeAWSResource(item, cfg)
+			got, arn, err := observeAWSResource(&item, cfg)
 			if err != nil {
 				t.Fatalf("observeAWSResource returned error: %v", err)
 			}
@@ -58,7 +58,7 @@ func TestObserveAWSResourceFakeScenarios(t *testing.T) {
 					Strategy: "instance_refresh",
 				},
 			}
-			got, arn, err := observeAWSResource(item, cfg)
+			got, arn, err := observeAWSResource(&item, cfg)
 			if err != nil {
 				t.Fatalf("observeAWSResource returned error: %v", err)
 			}
@@ -124,7 +124,7 @@ func TestDesiredGenerationUnmet(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := desiredGenerationUnmet(test.item, group); got != test.want {
+			if got := desiredGenerationUnmet(&test.item, &group); got != test.want {
 				t.Fatalf("desiredGenerationUnmet() = %t, want %t", got, test.want)
 			}
 		})
@@ -158,7 +158,7 @@ printf '%s\n' "$FAKE_AWS_GROUP_RESPONSE"
 		"FAKE_AWS_GROUP_RESPONSE",
 		`{"AutoScalingGroups":[{"AutoScalingGroupARN":"arn:example","Tags":[{"Key":"rotation","Value":"blue"}],"Activities":[{"StatusCode":"Successful","Progress":100}],"Instances":[{"LifecycleState":"InService"}]}]}`,
 	)
-	status, _, err := observeAWSResource(item, cfg)
+	status, _, err := observeAWSResource(&item, cfg)
 	if err != nil {
 		t.Fatalf("observeAWSResource returned error: %v", err)
 	}
@@ -184,7 +184,7 @@ printf '%s\n' "$FAKE_AWS_GROUP_RESPONSE"
 		"FAKE_AWS_GROUP_RESPONSE",
 		`{"AutoScalingGroups":[{"AutoScalingGroupARN":"arn:example","Tags":[{"Key":"rotation","Value":"green"}],"Activities":[{"StatusCode":"Successful","Progress":100}],"Instances":[{"LifecycleState":"InService"}]}]}`,
 	)
-	status, _, err = observeAWSResource(item, cfg)
+	status, _, err = observeAWSResource(&item, cfg)
 	_ = writePipe.Close()
 	os.Stderr = oldStderr
 	output, readErr := io.ReadAll(readPipe)
@@ -211,7 +211,7 @@ func TestObserveAWSResourceFallsBackToContractStatusOnAWSFailure(t *testing.T) {
 			Strategy: "instance_refresh",
 		},
 	}
-	got, arn, err := observeAWSResource(item, awscmd.Config{BinaryPath: "/missing/aws"})
+	got, arn, err := observeAWSResource(&item, awscmd.Config{BinaryPath: "/missing/aws"})
 	if err != nil {
 		t.Fatalf("observeAWSResource returned error: %v", err)
 	}

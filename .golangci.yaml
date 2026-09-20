@@ -68,7 +68,7 @@ linters:
       threshold: 100
     goconst:
       min-len: 2
-      min-occurrences: 2
+      min-occurrences: 3
     gocritic:
       enabled-tags:
         - diagnostic
@@ -76,6 +76,9 @@ linters:
         - opinionated
         - performance
         - style
+      # nonamedreturns enforces the opposite policy for multi-result functions.
+      disabled-checks:
+        - unnamedResult
       # Settings passed to gocritic.
       # The settings key is the name of a supported gocritic checker.
       # The list of supported checkers can be found at https://go-critic.com/overview.
@@ -113,7 +116,7 @@ linters:
         - func
       disable-dec-order-check: false
       disable-init-func-first-check: false
-      disable-dec-num-check: false        # Allow multiple declarations of same type
+      disable-dec-num-check: true         # Allow multiple declarations of same type
     gocognit:
       min-complexity: 25                  # Minimal code complexity to report (default: 30)
     revive:
