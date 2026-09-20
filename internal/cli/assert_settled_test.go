@@ -7,10 +7,6 @@ import (
 	"testing"
 )
 
-func fakeAWSBinPath() string {
-	return filepath.Join("..", "..", "testdata", "fake-aws-bin", "aws")
-}
-
 func defaultRotationPlanPath() string {
 	return filepath.Join("..", "..", "stubs", "asg-default-rotation.json")
 }
@@ -22,7 +18,7 @@ func TestScanAssertAllSettledSucceedsWhenNoRefreshInProgress(t *testing.T) {
 
 	t.Setenv("FAKE_AWS_SCENARIO", "success")
 
-	err := cmd.ExecuteArgs([]string{"scan", "--assert-all-settled", "--aws-cli-path", fakeAWSBinPath(), defaultRotationPlanPath()})
+	err := cmd.ExecuteArgs([]string{"scan", "--assert-all-settled", "--aws-cli-path", fakeAWSCLIPath(t), defaultRotationPlanPath()})
 	if err != nil {
 		t.Fatalf("ExecuteArgs returned error: %v", err)
 	}
@@ -38,7 +34,7 @@ func TestScanAssertAllSettledFailsWhenRefreshInProgress(t *testing.T) {
 
 	t.Setenv("FAKE_AWS_SCENARIO", "in-progress")
 
-	err := cmd.ExecuteArgs([]string{"scan", "--assert-all-settled", "--aws-cli-path", fakeAWSBinPath(), defaultRotationPlanPath()})
+	err := cmd.ExecuteArgs([]string{"scan", "--assert-all-settled", "--aws-cli-path", fakeAWSCLIPath(t), defaultRotationPlanPath()})
 	if err == nil {
 		t.Fatalf("ExecuteArgs returned nil error, want failure for in-progress refresh")
 	}

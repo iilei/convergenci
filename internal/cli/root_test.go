@@ -311,7 +311,7 @@ func TestAwaitCommandFlagAfterPositionalPath(t *testing.T) {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
 
-	if err := cmd.ExecuteArgs([]string{"await", contractPath, "--aws-cli-path", filepath.Join("..", "..", "testdata", "fake-aws-bin", "aws")}); err != nil {
+	if err := cmd.ExecuteArgs([]string{"await", contractPath, "--aws-cli-path", fakeAWSCLIPath(t)}); err != nil {
 		t.Fatalf("ExecuteArgs returned error: %v", err)
 	}
 
@@ -347,7 +347,7 @@ func TestAwaitCommandUsesEnvDefaultTimeoutAndInterval(t *testing.T) {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
 
-	if err := cmd.ExecuteArgs([]string{"await", "--aws-cli-path", filepath.Join("..", "..", "testdata", "fake-aws-bin", "aws"), contractPath}); err != nil {
+	if err := cmd.ExecuteArgs([]string{"await", "--aws-cli-path", fakeAWSCLIPath(t), contractPath}); err != nil {
 		t.Fatalf("ExecuteArgs returned error: %v", err)
 	}
 
@@ -466,6 +466,7 @@ func TestWithObservationFulfilledPreservesMixedResourceState(t *testing.T) {
 
 func TestAwaitTimeoutReportsToStderr(t *testing.T) {
 	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", DesiredGeneration: map[string]any{"rotation": "v2"}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
+	t.Setenv("FAKE_AWS_SCENARIO", "in-progress")
 
 	old := os.Stderr
 	reader, writer, err := os.Pipe()

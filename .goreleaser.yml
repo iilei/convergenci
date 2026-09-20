@@ -3,12 +3,12 @@ version: 2
 before:
   hooks:
     - go mod tidy
-    - go test ./...
+    - ./scripts/goreleaser-test.sh
 
 builds:
   - id: convergenci-cli-linux
-    main: ./cmd/convergenci-cli
-    binary: convergenci-cli
+    main: ./cmd/convergenci
+    binary: convergenci
     env:
       - CGO_ENABLED=0
     goos:
@@ -26,8 +26,8 @@ builds:
       - -X main.date={{.Date}}
 
   - id: convergenci-cli-darwin
-    main: ./cmd/convergenci-cli
-    binary: convergenci-cli
+    main: ./cmd/convergenci
+    binary: convergenci
     env:
       - CGO_ENABLED=0
     goos:
@@ -42,8 +42,8 @@ builds:
       - -X main.date={{.Date}}
 
   - id: convergenci-cli-windows
-    main: ./cmd/convergenci-cli
-    binary: convergenci-cli
+    main: ./cmd/convergenci
+    binary: convergenci
     env:
       - CGO_ENABLED=0
     goos:
@@ -94,6 +94,7 @@ universal_binaries:
   - id: convergenci-cli-darwin
     ids:
       - convergenci-cli-darwin
+    name_template: convergenci
     replace: true
 
 checksum:
@@ -143,7 +144,7 @@ release:
   header: |
     ## convergenci-cli {{ .Tag }} ({{ .Date }})
 
-    Phonetic identifier generator - converts numbers to pronounceable identifiers.
+    Convergenci verifies that infrastructure changes have converged in AWS.
   footer: |
     **Full Changelog**: https://github.com/iilei/convergenci-cli/compare/{{ .PreviousTag }}...{{ .Tag }}
 
@@ -154,5 +155,5 @@ release:
 
     ### Using Go
     ```bash
-    go install github.com/iilei/convergenci-cli/cmd/convergenci-cli@{{ .Tag }}
+    go install github.com/iilei/convergenci-cli/cmd/convergenci@{{ .Tag }}
     ```

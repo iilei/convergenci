@@ -12,14 +12,23 @@ type Config struct {
 	Profile    string
 }
 
+const awsCLIPathEnv = "CONVERGENCI_AWS_CLI_PATH"
+
+func defaultAWSCLIPath() string {
+	if path := os.Getenv(awsCLIPathEnv); path != "" {
+		return path
+	}
+	return "aws"
+}
+
 // DefaultConfig returns the default AWS CLI execution settings.
 func DefaultConfig() Config {
-	return Config{BinaryPath: "aws"}
+	return Config{BinaryPath: defaultAWSCLIPath()}
 }
 
 // RegisterFlags adds the shared AWS CLI flags and returns the configured values.
 func RegisterFlags(fs *flag.FlagSet) (binaryPath *string, profileName *string) {
-	binaryPath = fs.String("aws-cli-path", "aws", "path to the AWS CLI binary (default: aws)")
+	binaryPath = fs.String("aws-cli-path", "aws", "path to the AWS CLI binary")
 	profileName = fs.String("aws-profile-name", "", "AWS profile name to use for AWS CLI calls")
 	return binaryPath, profileName
 }

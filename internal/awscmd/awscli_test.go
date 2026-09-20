@@ -29,3 +29,11 @@ func TestConfigArgsWithoutProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultConfigUsesAWSCLIPathEnvironment(t *testing.T) {
+	t.Setenv("CONVERGENCI_AWS_CLI_PATH", "/tmp/fake-aws")
+
+	if got := DefaultConfig().BinaryPath; got != "/tmp/fake-aws" {
+		t.Fatalf("DefaultConfig().BinaryPath = %q, want %q", got, "/tmp/fake-aws")
+	}
+}

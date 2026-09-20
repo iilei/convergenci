@@ -187,6 +187,7 @@ Behavior:
 - with `--jsonlines` it writes `asg-default-rotation.convergence.jsonlines`
 - if no plan input is supplied it falls back to `.convergence.json` or `.convergence.jsonlines`
 - AWS CLI invocation can be directed with `--aws-cli-path` and `--aws-profile-name`
+- AWS CLI path can also be set with `CONVERGENCI_AWS_CLI_PATH`; an explicit `--aws-cli-path` flag takes precedence
 - output paths must be safe: absolute paths are allowed, but relative paths that escape the working directory via `..` are rejected
 - existing output files are not overwritten unless `--force` is supplied
 
