@@ -117,6 +117,7 @@ func complexReportAutoscalingGroups() []map[string]any {
 	return []map[string]any{
 		{
 			"AutoScalingGroupName": "web-frontend",
+			"AutoScalingGroupARN":  fakeASGARN("web-frontend"),
 			"DesiredCapacity":      2,
 			"MinSize":              1,
 			"MaxSize":              4,
@@ -128,6 +129,7 @@ func complexReportAutoscalingGroups() []map[string]any {
 		},
 		{
 			"AutoScalingGroupName": "api-backend",
+			"AutoScalingGroupARN":  fakeASGARN("api-backend"),
 			"DesiredCapacity":      1,
 			"MinSize":              1,
 			"MaxSize":              2,
@@ -138,6 +140,7 @@ func complexReportAutoscalingGroups() []map[string]any {
 		},
 		{
 			"AutoScalingGroupName": "worker-batch",
+			"AutoScalingGroupARN":  fakeASGARN("worker-batch"),
 			"DesiredCapacity":      2,
 			"MinSize":              1,
 			"MaxSize":              3,

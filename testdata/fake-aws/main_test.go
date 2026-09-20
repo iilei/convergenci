@@ -51,6 +51,11 @@ func TestComplexReportScenarioReturnsMultipleASGs(t *testing.T) {
 		if !seen[name] {
 			t.Fatalf("missing expected ASG %q in complex report", name)
 		}
+		for _, group := range groups {
+			if group["AutoScalingGroupName"] == name && group["AutoScalingGroupARN"] != fakeASGARN(name) {
+				t.Fatalf("ASG %q ARN = %v, want %q", name, group["AutoScalingGroupARN"], fakeASGARN(name))
+			}
+		}
 	}
 }
 
