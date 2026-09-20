@@ -35,16 +35,16 @@ terraform show -json tfplan > tfplan.json
 
 convergenci scan tfplan.json > convergence.json
 
-convergenci --assert-all-settled <asg-name> [asg-name...]
+convergenci scan --assert-all-settled tfplan.json
 
 terraform apply tfplan
 
 convergenci await convergence.json
 ```
 
-`--assert-all-settled` assumes the caller holds a Terraform state lock for the
-duration of `apply`, so at most one relevant change can be in flight. Under
-that assumption, correlation between an apply and its runtime effect no
+`scan --assert-all-settled` assumes the caller holds a Terraform state lock for
+the duration of `apply`, so at most one relevant change can be in flight.
+Under that assumption, correlation between an apply and its runtime effect no
 longer needs to resolve concurrent/superseding changes (see the ADR for
 details) — it only needs a pre-apply/post-apply boundary.
 
@@ -86,6 +86,33 @@ convergenci scan --output-json ./artifacts/asg-plan.convergence.json tfplan.json
 convergenci scan --output-json /tmp/asg-plan.convergence.json --force tfplan.json
 ```
 
+##### `scan --assert-all-settled`
+
+Assert that nothing relevant is currently converging for the resources that
+`scan` would otherwise turn into a contract, across all resource kinds
+supported by convergenci (currently only ASG instance refreshes).
+
+```bash
+convergenci scan --assert-all-settled [--aws-cli-path PATH] [--aws-profile-name NAME] <tfplan.json>
+```
+
+Behavior:
+
+- resolves AWS resource names (e.g. Auto Scaling Group names) from the
+  Terraform plan, using the same matching rules `scan` uses to build a
+  contract — no convergence contract or explicit resource names are required
+- for each matched resource, observes AWS and fails if a relevant runtime
+  operation (an ASG instance refresh) is currently in progress
+- exits non-zero if any resource is not settled, so it can gate `terraform
+  apply` in CI
+- does not write a convergence contract or any other file in this mode; it is
+  a point-in-time AWS check
+
+This command assumes the caller holds a Terraform state lock (or otherwise
+serializes applies) for the duration of `apply`, so it does not attempt to
+resolve concurrent or superseding changes — it only establishes a
+before/after boundary for correlation.
+
 #### `await`
 
 Wait for the runtime state described in a convergence contract to converge.
@@ -110,30 +137,6 @@ Example:
 convergenci await --timeout 10m --interval 15s ./artifacts/asg-plan.convergence.json
 convergenci await --force ./artifacts/asg-plan.convergence.json
 ```
-
-#### `--assert-all-settled`
-
-Assert that nothing relevant is currently converging, across all resource
-kinds supported by convergenci (currently only ASG instance refreshes).
-
-```bash
-convergenci --assert-all-settled <asg-name> [asg-name...]
-```
-
-Behavior:
-
-- takes one or more resource names (currently Auto Scaling Group names)
-- for each name, observes AWS and fails if a relevant runtime operation
-  (an ASG instance refresh) is currently in progress
-- exits non-zero if any resource is not settled, so it can gate `terraform
-  apply` in CI
-- does not read or write a convergence contract or any other file; it is a
-  point-in-time AWS check
-
-This command assumes the caller holds a Terraform state lock (or otherwise
-serializes applies) for the duration of `apply`, so it does not attempt to
-resolve concurrent or superseding changes — it only establishes a
-before/after boundary for correlation.
 
 ## Debug logging
 

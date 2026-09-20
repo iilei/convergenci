@@ -176,6 +176,15 @@ func describeProgress(scenario string) (status string, percentage int, completed
 	}
 }
 
+func requestedASGName(rest []string) string {
+	for i, arg := range rest {
+		if arg == "--auto-scaling-group-name" && i+1 < len(rest) {
+			return rest[i+1]
+		}
+	}
+	return "fake-asg"
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "fake aws: no command supplied")
@@ -211,6 +220,7 @@ func main() {
 			os.Exit(2)
 		}
 		subcommand := rest[0]
+		asgName := requestedASGName(rest)
 		switch subcommand {
 		case "describe-auto-scaling-groups":
 			if scenario == "complex-report" {
@@ -224,7 +234,7 @@ func main() {
 			progressStatus, progressPct, progressCompletedAt := describeProgress(scenario)
 			response := map[string]any{
 				"AutoScalingGroups": []map[string]any{{
-					"AutoScalingGroupName": "fake-asg",
+					"AutoScalingGroupName": asgName,
 					"DesiredCapacity":      2,
 					"MinSize":              1,
 					"MaxSize":              3,
@@ -237,7 +247,7 @@ func main() {
 			}
 			if progressStatus == "InProgress" {
 				response["AutoScalingGroups"] = []map[string]any{{
-					"AutoScalingGroupName": "fake-asg",
+					"AutoScalingGroupName": asgName,
 					"DesiredCapacity":      2,
 					"MinSize":              1,
 					"MaxSize":              3,
@@ -250,7 +260,7 @@ func main() {
 			}
 			if scenario == "failed" {
 				response["AutoScalingGroups"] = []map[string]any{{
-					"AutoScalingGroupName": "fake-asg",
+					"AutoScalingGroupName": asgName,
 					"DesiredCapacity":      2,
 					"MinSize":              1,
 					"MaxSize":              3,
@@ -285,7 +295,7 @@ func main() {
 			status, percentage, completedAt := describeProgress(scenario)
 			response := map[string]any{
 				"InstanceRefreshes": []map[string]any{{
-					"AutoScalingGroupName": "fake-asg",
+					"AutoScalingGroupName": asgName,
 					"InstanceRefreshId":    "ir-123",
 					"Status":               status,
 					"PercentageComplete":   percentage,
@@ -294,7 +304,7 @@ func main() {
 			}
 			if scenario == "failed" {
 				response["InstanceRefreshes"] = []map[string]any{{
-					"AutoScalingGroupName": "fake-asg",
+					"AutoScalingGroupName": asgName,
 					"InstanceRefreshId":    "ir-123",
 					"Status":               "Failed",
 					"PercentageComplete":   100,

@@ -52,13 +52,12 @@ func (c *Command) initFlagSet() {
 		fmt.Fprintf(c.out, "  doctor         Check AWS CLI availability and render a human-friendly report\n\n")
 		fmt.Fprintf(c.out, "Examples:\n")
 		fmt.Fprintf(c.out, "  convergenci scan <tfplan.json>\n")
-		fmt.Fprintf(c.out, "  convergenci --assert-all-settled <asg-name> [asg-name...]\n")
+		fmt.Fprintf(c.out, "  convergenci scan --assert-all-settled <tfplan.json>\n")
 		fmt.Fprintf(c.out, "  convergenci await <convergence.json>\n")
 		fmt.Fprintf(c.out, "  convergenci doctor ./artifacts/report.json\n\n")
 		fmt.Fprintf(c.out, "Flags:\n")
 		fmt.Fprintf(c.out, "  -v, --version  Show version information and exit\n")
 		fmt.Fprintf(c.out, "  --debug       Enable debug logging\n")
-		fmt.Fprintf(c.out, "  --assert-all-settled  Assert nothing relevant is currently converging (takes resource names)\n")
 		fmt.Fprintf(c.out, "  -h, --help     Show help\n")
 	}
 	c.fs = fs
@@ -151,8 +150,6 @@ func (c *Command) ExecuteArgs(args []string) error {
 		return c.executeAwait(args[1:])
 	case "doctor":
 		return c.executeDoctor(args[1:])
-	case "--assert-all-settled":
-		return c.executeAssertAllSettled(args[1:])
 	}
 
 	if err := c.fs.Parse(args); err != nil {

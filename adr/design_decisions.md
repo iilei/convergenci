@@ -400,16 +400,16 @@ The implementation should favor straightforward code over abstraction-heavy fram
 
 ---
 
-## 14. `--assert-all-settled` and Lock-Based Correlation
+## 14. `scan --assert-all-settled` and Lock-Based Correlation
 
-`--assert-all-settled` is a global flag (not a subcommand) that runs after `scan` and before `terraform apply`:
+`--assert-all-settled` is a flag on the `scan` subcommand, not a standalone command or a global root flag. It reuses `scan`'s own plan-matching logic (`BuildContract`'s policy/regex matching, exposed as `MatchedResourceNames`) to resolve which AWS resources are relevant, so the two never disagree about what a plan touches. It takes a Terraform plan path, not a convergence contract path and not explicit resource names:
 
 ```text
 convergenci scan tfplan.json
         ↓
 convergence.json
 
-convergenci --assert-all-settled <asg-name> [asg-name...]
+convergenci scan --assert-all-settled tfplan.json
         ↓
 "nothing relevant is currently converging"
 
@@ -420,9 +420,9 @@ convergenci await convergence.json
 "the change described by this contract has converged"
 ```
 
-It takes resource names directly (currently Auto Scaling Group names) rather than a convergence contract path. It does not read or write any file: it is a stateless, point-in-time AWS check.
+In this mode `scan` does not read or write a convergence contract or any other file: it is a stateless, point-in-time AWS check that reuses the plan-scanning code path instead of `scan`'s contract-emission path.
 
-Its responsibility is limited to: for each named resource, observe AWS and fail (non-zero exit) if a relevant runtime operation is currently in progress (e.g. an ASG instance refresh already running or pending). This protects against running `apply` while a prior rotation has not finished. It dispatches by resource kind; ASG is the only kind implemented today, and future kinds (e.g. ECS) would be added the same way.
+Its responsibility is limited to: for each AWS resource name resolved from the plan, observe AWS and fail (non-zero exit) if a relevant runtime operation is currently in progress (e.g. an ASG instance refresh already running or pending). This protects against running `apply` while a prior rotation has not finished. It dispatches by resource kind; ASG is the only kind implemented today, and future kinds (e.g. ECS) would be added the same way.
 
 This command relies on the caller holding a Terraform state lock (or otherwise serializing applies) for the duration of `apply`. Convergenci does not implement locking itself; it only asserts, at one point in time, that the precondition the lock is meant to guarantee actually holds.
 
@@ -444,7 +444,7 @@ verify postcondition
 
 This removes the need for supersession handling (Section 10) while keeping the existing contract-based postcondition model (Section 7) unchanged: the contract still defines what "converged" means, `--assert-all-settled` only establishes that nothing was already in flight before the apply.
 
-Because `--assert-all-settled` does not persist a pre-apply runtime ID anywhere, `await` currently has no baseline to distinguish "the instance refresh caused by this apply" from one that started between the assertion and `apply` outside of the lock's protection. In practice the lock is expected to prevent that gap; if stronger before/after correlation is needed later, a baseline artifact could be reintroduced without changing `--assert-all-settled`'s stateless contract-free interface.
+Because `--assert-all-settled` does not persist a pre-apply runtime ID anywhere, `await` currently has no baseline to distinguish "the instance refresh caused by this apply" from one that started between the assertion and `apply` outside of the lock's protection. In practice the lock is expected to prevent that gap; if stronger before/after correlation is needed later, a baseline artifact could be reintroduced without changing `--assert-all-settled`'s stateless, contract-free interface.
 
 ### Test coverage gap: Terragrunt-style environments
 

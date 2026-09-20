@@ -122,6 +122,59 @@ func BuildContract(plan TerraformPlan, policy RecordPolicy, addressRegex string,
 	return contract, nil
 }
 
+// MatchedResourceNames returns the AWS resource names (e.g. ASG names) for plan resource
+// changes matching the given policy, using the same matching rules as BuildContract. This
+// lets callers like assert-all-settled identify AWS resources directly from a plan without
+// requiring a previously generated convergence contract or explicit resource names.
+func MatchedResourceNames(plan TerraformPlan, policy RecordPolicy, addressRegex string) ([]string, error) {
+	if addressRegex == "" {
+		addressRegex = policy.DefaultRegex
+	}
+
+	compiled, err := regexp.Compile(addressRegex)
+	if err != nil {
+		return nil, err
+	}
+
+	var names []string
+	for _, change := range plan.ResourceChanges {
+		if change.Type != policy.ResourceType {
+			continue
+		}
+		if !compiled.MatchString(change.Address) {
+			continue
+		}
+		if name, ok := resourceName(change); ok {
+			names = append(names, name)
+		}
+	}
+	return names, nil
+}
+
+// resourceName resolves the AWS resource name from a plan resource change, preferring the
+// after state and falling back to before (e.g. for destroy-only changes).
+func resourceName(change ResourceChange) (string, bool) {
+	if name, ok := stringValue(change.Change.After, "name"); ok {
+		return name, true
+	}
+	if name, ok := stringValue(change.Change.Before, "name"); ok {
+		return name, true
+	}
+	return "", false
+}
+
+func stringValue(obj map[string]any, path string) (string, bool) {
+	value, ok := nestedValue(obj, path)
+	if !ok {
+		return "", false
+	}
+	s, ok := value.(string)
+	if !ok || s == "" {
+		return "", false
+	}
+	return s, true
+}
+
 // firstIndicatorValue walks indicator paths in order and returns the first non-empty value.
 func firstIndicatorValue(obj map[string]any, paths []string) (any, string, bool) {
 	for _, p := range paths {

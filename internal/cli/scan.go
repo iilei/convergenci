@@ -37,14 +37,17 @@ func (c *Command) executeScan(args []string) error {
 	outputJSON := fs.String("output-json", "", "write the generated convergence contract to a JSON file")
 	jsonlines := fs.Bool("jsonlines", false, "write the generated convergence contract as JSON Lines")
 	force := fs.Bool("force", false, "overwrite an existing output file")
+	assertAllSettled := fs.Bool("assert-all-settled", false, "assert that no relevant AWS operation is currently in progress for the plan's resources, instead of emitting a contract")
 	awsCLIPath, awsProfileName := awscmd.RegisterFlags(fs)
 	fs.Usage = func() {
-		fmt.Fprintf(c.out, "Usage: convergenci scan <tfplan.json>\n\n")
+		fmt.Fprintf(c.out, "Usage: convergenci scan <tfplan.json>\n")
+		fmt.Fprintf(c.out, "       convergenci scan --assert-all-settled <tfplan.json>\n\n")
 		fmt.Fprintf(c.out, "Scan a Terraform plan and emit a convergence contract.\n\n")
 		fmt.Fprintf(c.out, "Flags:\n")
 		fmt.Fprintf(c.out, "  --output-json PATH    Write the generated convergence contract to a JSON file at PATH\n")
 		fmt.Fprintf(c.out, "  --jsonlines           Write the generated convergence contract as JSON Lines\n")
 		fmt.Fprintf(c.out, "  --force              Overwrite an existing output file\n")
+		fmt.Fprintf(c.out, "  --assert-all-settled Assert nothing relevant is currently converging for the plan's resources\n")
 		fmt.Fprint(c.out, awscmd.UsageText())
 		fmt.Fprintf(c.out, "  -h, --help            Show help\n")
 	}
@@ -56,6 +59,26 @@ func (c *Command) executeScan(args []string) error {
 	positionals, err := parseFlagsWithPositionals(fs, args)
 	if err != nil {
 		return err
+	}
+
+	cmdCfg := awscmd.DefaultConfig()
+	if *awsCLIPath != "aws" {
+		cmdCfg.BinaryPath = *awsCLIPath
+		fmt.Fprintf(c.out, "aws-cli-path: %s\n", *awsCLIPath)
+	}
+	if *awsProfileName != "" {
+		cmdCfg.Profile = *awsProfileName
+		fmt.Fprintf(c.out, "aws-profile-name: %s\n", *awsProfileName)
+	}
+	if DebugEnabled() {
+		Debugf("aws command config: binary=%s profile=%q", cmdCfg.BinaryPath, cmdCfg.Profile)
+	}
+
+	if *assertAllSettled {
+		if len(positionals) == 0 {
+			return &ExitCodeError{Code: codeConfigError, Message: "a terraform plan path is required"}
+		}
+		return c.executeScanAssertAllSettled(positionals[0], cmdCfg)
 	}
 
 	path := *outputJSON
@@ -72,18 +95,6 @@ func (c *Command) executeScan(args []string) error {
 	}
 
 	if len(positionals) == 0 {
-		cmdCfg := awscmd.DefaultConfig()
-		if *awsCLIPath != "aws" {
-			cmdCfg.BinaryPath = *awsCLIPath
-			fmt.Fprintf(c.out, "aws-cli-path: %s\n", *awsCLIPath)
-		}
-		if *awsProfileName != "" {
-			cmdCfg.Profile = *awsProfileName
-			fmt.Fprintf(c.out, "aws-profile-name: %s\n", *awsProfileName)
-		}
-		if DebugEnabled() {
-			Debugf("aws command config: binary=%s profile=%q", cmdCfg.BinaryPath, cmdCfg.Profile)
-		}
 		return nil
 	}
 
@@ -102,19 +113,40 @@ func (c *Command) executeScan(args []string) error {
 	if err := writeScanArtifact(path, contract, *jsonlines, *force); err != nil {
 		return err
 	}
+	return nil
+}
 
-	cmdCfg := awscmd.DefaultConfig()
-	if *awsCLIPath != "aws" {
-		cmdCfg.BinaryPath = *awsCLIPath
-		fmt.Fprintf(c.out, "aws-cli-path: %s\n", *awsCLIPath)
+// executeScanAssertAllSettled resolves AWS resource names from the plan using the same
+// matching rules as BuildContract, then asserts none of them are currently converging.
+func (c *Command) executeScanAssertAllSettled(planPath string, cmdCfg awscmd.Config) error {
+	plan, err := scan.LoadPlan(planPath)
+	if err != nil {
+		return &ExitCodeError{Code: codeIOError, Message: fmt.Sprintf("unable to read terraform plan: %v", err)}
 	}
-	if *awsProfileName != "" {
-		cmdCfg.Profile = *awsProfileName
-		fmt.Fprintf(c.out, "aws-profile-name: %s\n", *awsProfileName)
+	names, err := scan.MatchedResourceNames(plan, scan.ASGDefaultPolicy, "")
+	if err != nil {
+		return &ExitCodeError{Code: codeConfigError, Message: err.Error()}
 	}
-	if DebugEnabled() {
-		Debugf("aws command config: binary=%s profile=%q", cmdCfg.BinaryPath, cmdCfg.Profile)
+	if len(names) == 0 {
+		fmt.Fprintln(c.out, "no matching resources in plan")
+		return nil
 	}
+
+	var notSettled []string
+	for _, name := range names {
+		inProgress, err := asgInstanceRefreshInProgress(name, cmdCfg)
+		if err != nil {
+			return &ExitCodeError{Code: codeGenericFailure, Message: err.Error()}
+		}
+		if inProgress {
+			notSettled = append(notSettled, name)
+		}
+	}
+	if len(notSettled) > 0 {
+		return &ExitCodeError{Code: codeGenericFailure, Message: fmt.Sprintf("not settled: %s", strings.Join(notSettled, ", "))}
+	}
+
+	fmt.Fprintln(c.out, "all resources settled")
 	return nil
 }
 
