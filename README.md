@@ -303,6 +303,79 @@ Example:
 convergenci report ./artifacts/asg-plan.convergence-report.json
 ```
 
+## End-to-end example
+
+The repository ships a fake AWS CLI and a multi-stack Terragrunt-style fixture
+so the full `scan` → `--assert-all-settled` → `await` → `report` flow can be
+exercised locally, without touching real AWS. This is the output of
+`mise run fake-aws-scenarios-terragrunt`:
+
+```text
+$ convergenci scan stubs/terragrunt-multi-stack.json \
+    --output-json .bench/terragrunt-multi-stack/.convergence.json \
+    --aws-cli-path ./testdata/fake-aws-bin/aws
+aws-cli-path: /path/to/testdata/fake-aws-bin/aws
+output-json: .bench/terragrunt-multi-stack/.convergence.json
+
+$ FAKE_AWS_SCENARIO=success convergenci scan stubs/terragrunt-multi-stack.json \
+    --assert-all-settled --aws-cli-path ./testdata/fake-aws-bin/aws
+aws-cli-path: /path/to/testdata/fake-aws-bin/aws
+all resources settled
+
+$ FAKE_AWS_SCENARIO=in-progress convergenci scan stubs/terragrunt-multi-stack.json \
+    --assert-all-settled --aws-cli-path ./testdata/fake-aws-bin/aws
+aws-cli-path: /path/to/testdata/fake-aws-bin/aws
+not settled: prod-us-east-1-web, prod-us-east-1-worker, prod-eu-west-1-web, prod-eu-west-1-worker (exit code 240)
+
+$ FAKE_AWS_SCENARIO=success convergenci await \
+    --timeout 3s --interval 100ms \
+    .bench/terragrunt-multi-stack/.convergence.json \
+    --aws-cli-path ./testdata/fake-aws-bin/aws
+aws-cli-path: /path/to/testdata/fake-aws-bin/aws
+timeout: 3s
+interval: 100ms
+
+$ convergenci report .bench/terragrunt-multi-stack/.convergence.convergence-report.json
+Status: successful
+Message: all resources converged
+Contract: .bench/terragrunt-multi-stack/.convergence.json
+Expected resources: 4
+Pending resources: 0
+Converged resources: 4
+Started at: 2026-09-20T16:17:14.759948941Z
+Finished at: 2026-09-20T16:17:16.065673125Z
+
+---
+Resources:
+ * module.terragrunt["prod-eu-west-1"].module.platform.aws_autoscaling_group.web
+   status: converged
+   arn: arn:aws:autoscaling:us-east-1:123456789012:autoScalingGroup:::prod-eu-west-1-web
+   strategy: instance_refresh
+   desired: tag rotation=green launch_template version=8
+ * module.terragrunt["prod-eu-west-1"].module.platform.aws_autoscaling_group.worker
+   status: converged
+   arn: arn:aws:autoscaling:us-east-1:123456789012:autoScalingGroup:::prod-eu-west-1-worker
+   strategy: instance_refresh
+   desired: tag rotation=green launch_template version=12
+ * module.terragrunt["prod-us-east-1"].module.platform.aws_autoscaling_group.web
+   status: converged
+   arn: arn:aws:autoscaling:us-east-1:123456789012:autoScalingGroup:::prod-us-east-1-web
+   strategy: instance_refresh
+   desired: tag rotation=green launch_template version=8
+ * module.terragrunt["prod-us-east-1"].module.platform.aws_autoscaling_group.worker
+   status: converged
+   arn: arn:aws:autoscaling:us-east-1:123456789012:autoScalingGroup:::prod-us-east-1-worker
+   strategy: instance_refresh
+   desired: tag rotation=green launch_template version=12
+---
+```
+
+Run it yourself with:
+
+```bash
+mise run fake-aws-scenarios-terragrunt
+```
+
 ## Debug logging
 
 Debug logging is controlled by the global `DEBUG` environment variable and the `--debug` flag.
