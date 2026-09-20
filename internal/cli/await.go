@@ -140,26 +140,29 @@ func (c *Command) executeAwait(args []string) error {
 		return &ExitCodeError{Code: codeIOError, Message: fmt.Sprintf("unable to read convergence contract: %v", err)}
 	}
 	if len(contract.Resources) > 200 {
-		if err := writeAwaitReport(path, contract, "failed", *force); err != nil {
+		if err := writeAwaitReport(path, contract, "failed", *force, nil); err != nil {
 			return &ExitCodeError{Code: codeIOError, Message: fmt.Sprintf("unable to write summary report: %v", err)}
 		}
 		return &ExitCodeError{Code: codeResourceLimitExceeded, Message: "expected resources exceeds 200"}
 	}
 
 	result, err := pollAwait(contract, *timeout, *interval, cmdCfg)
+	if result.Contract.Resources != nil {
+		contract = result.Contract
+	}
 	if err != nil {
-		if reportErr := writeAwaitReport(path, contract, result.Status, *force); reportErr != nil {
+		if reportErr := writeAwaitReport(path, contract, result.Status, *force, result.ResourceWaits); reportErr != nil {
 			return &ExitCodeError{Code: codeIOError, Message: fmt.Sprintf("unable to write summary report: %v", reportErr)}
 		}
 		return err
 	}
 	if result.Status == "converged" {
-		if err := writeAwaitReport(path, contract, result.Status, *force); err != nil {
+		if err := writeAwaitReport(path, contract, result.Status, *force, result.ResourceWaits); err != nil {
 			return &ExitCodeError{Code: codeIOError, Message: fmt.Sprintf("unable to write summary report: %v", err)}
 		}
 		return nil
 	}
-	if err := writeAwaitReport(path, contract, result.Status, *force); err != nil {
+	if err := writeAwaitReport(path, contract, result.Status, *force, result.ResourceWaits); err != nil {
 		return &ExitCodeError{Code: codeIOError, Message: fmt.Sprintf("unable to write summary report: %v", err)}
 	}
 	return &ExitCodeError{Code: result.ExitCode, Message: result.Message}
@@ -247,11 +250,12 @@ type awaitPollResult struct {
 	Pending       int
 	Converged     int
 	ResourceWaits []awaitResourceWait
+	Contract      scan.Contract
 }
 
 func pollAwait(contract scan.Contract, timeout, interval time.Duration, cmdCfg awscmd.Config) (awaitPollResult, error) {
 	if len(contract.Resources) == 0 {
-		return awaitPollResult{Status: "converged", Message: "no resources to check", ExitCode: 0, Pending: 0, Converged: 0}, nil
+		return awaitPollResult{Status: "converged", Message: "no resources to check", ExitCode: 0, Pending: 0, Converged: 0, Contract: contract}, nil
 	}
 	start := time.Now()
 	maxAttempts := 1
@@ -264,36 +268,36 @@ func pollAwait(contract scan.Contract, timeout, interval time.Duration, cmdCfg a
 	for attempt := 1; ; attempt++ {
 		pending, converged, status, message, waits, err := awsContractState(contract, cmdCfg)
 		if err != nil {
-			return awaitPollResult{Status: "failed", Message: err.Error(), ExitCode: codeGenericFailure, Pending: pending, Converged: converged, ResourceWaits: waits}, err
+			return awaitPollResult{Status: "failed", Message: err.Error(), ExitCode: codeGenericFailure, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, err
 		}
 		if status == "converged" {
-			return awaitPollResult{Status: "converged", Message: message, ExitCode: 0, Pending: 0, Converged: converged, ResourceWaits: waits}, nil
+			return awaitPollResult{Status: "converged", Message: message, ExitCode: 0, Pending: 0, Converged: converged, ResourceWaits: waits, Contract: contract}, nil
 		}
 		if status == "failed" {
-			return awaitPollResult{Status: "failed", Message: message, ExitCode: codeGenericFailure, Pending: pending, Converged: converged, ResourceWaits: waits}, &ExitCodeError{Code: codeGenericFailure, Message: message}
+			return awaitPollResult{Status: "failed", Message: message, ExitCode: codeGenericFailure, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, &ExitCodeError{Code: codeGenericFailure, Message: message}
 		}
 		if DebugEnabled() {
 			Debugf("retry %d/%d (elapsed %s)", attempt, maxAttempts, time.Since(start).Round(time.Second))
 		}
 		if timeout > 0 && time.Since(start) >= timeout {
 			fmt.Fprintf(os.Stderr, "timeout reached after %s\n", time.Since(start).Round(time.Second))
-			return awaitPollResult{Status: "timeout", Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending), ExitCode: codeTimeout, Pending: pending, Converged: converged, ResourceWaits: waits}, &ExitCodeError{Code: codeTimeout, Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending)}
+			return awaitPollResult{Status: "timeout", Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending), ExitCode: codeTimeout, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, &ExitCodeError{Code: codeTimeout, Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending)}
 		}
 		if timeout > 0 && attempt >= maxAttempts {
 			time.Sleep(interval)
 			if elapsed := time.Since(start); elapsed >= timeout {
 				fmt.Fprintf(os.Stderr, "timeout reached after %s\n", elapsed.Round(time.Second))
-				return awaitPollResult{Status: "timeout", Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending), ExitCode: codeTimeout, Pending: pending, Converged: converged, ResourceWaits: waits}, &ExitCodeError{Code: codeTimeout, Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending)}
+				return awaitPollResult{Status: "timeout", Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending), ExitCode: codeTimeout, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, &ExitCodeError{Code: codeTimeout, Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending)}
 			}
 			continue
 		}
 		if attempt >= maxAttempts {
-			return awaitPollResult{Status: "pending", Message: fmt.Sprintf("%d resource(s) remain pending", pending), ExitCode: codeGenericFailure, Pending: pending, Converged: converged, ResourceWaits: waits}, &ExitCodeError{Code: codeGenericFailure, Message: fmt.Sprintf("%d resource(s) remain pending", pending)}
+			return awaitPollResult{Status: "pending", Message: fmt.Sprintf("%d resource(s) remain pending", pending), ExitCode: codeGenericFailure, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, &ExitCodeError{Code: codeGenericFailure, Message: fmt.Sprintf("%d resource(s) remain pending", pending)}
 		}
 		time.Sleep(interval)
 		if timeout > 0 && time.Since(start) >= timeout {
 			fmt.Fprintf(os.Stderr, "timeout reached after %s\n", time.Since(start).Round(time.Second))
-			return awaitPollResult{Status: "timeout", Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending), ExitCode: codeTimeout, Pending: pending, Converged: converged, ResourceWaits: waits}, &ExitCodeError{Code: codeTimeout, Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending)}
+			return awaitPollResult{Status: "timeout", Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending), ExitCode: codeTimeout, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, &ExitCodeError{Code: codeTimeout, Message: fmt.Sprintf("timed out waiting for %d resource(s) to converge", pending)}
 		}
 	}
 }
@@ -303,16 +307,20 @@ func awsContractState(contract scan.Contract, cfg awscmd.Config) (pending int, c
 	converged = 0
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	for _, item := range contract.Resources {
+	for i, item := range contract.Resources {
+		idx := i
 		item := item
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			observed, runtimeErr := observeAWSResource(item, cfg)
+			observed, arn, runtimeErr := observeAWSResource(item, cfg)
 			elapsed := time.Since(start)
 			mu.Lock()
 			defer mu.Unlock()
+			if arn != "" {
+				contract.Resources[idx].Observation.ARN = arn
+			}
 			if runtimeErr != nil {
 				waits = append(waits, awaitResourceWait{Address: item.Address, Status: "failed", Wait: elapsed})
 				return
@@ -356,12 +364,12 @@ func countRuntimeErrors(waits []awaitResourceWait) int {
 	return count
 }
 
-func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (string, error) {
+func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status string, arn string, err error) {
 	if item.Observation.Strategy == "" {
 		if item.Status == "" || !strings.EqualFold(strings.TrimSpace(item.Status), "converged") {
-			return "pending", nil
+			return "pending", "", nil
 		}
-		return "converged", nil
+		return "converged", "", nil
 	}
 	resp, err := cfg.Run("autoscaling", "describe-instance-refreshes")
 	if err == nil {
@@ -379,29 +387,30 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (string, erro
 			}
 			switch strings.ToUpper(payload.InstanceRefreshes[0].Status) {
 			case "SUCCESSFUL":
-				return "converged", nil
+				return "converged", "", nil
 			case "FAILED":
-				return "failed", nil
+				return "failed", "", nil
 			case "INPROGRESS":
-				return "pending", nil
+				return "pending", "", nil
 			}
 		}
 	} else {
 		if item.Status == "" || !strings.EqualFold(strings.TrimSpace(item.Status), "converged") {
-			return "pending", nil
+			return "pending", "", nil
 		}
-		return "converged", nil
+		return "converged", "", nil
 	}
 	resp, err = cfg.Run("autoscaling", "describe-auto-scaling-groups")
 	if err != nil {
 		if item.Status == "" || !strings.EqualFold(strings.TrimSpace(item.Status), "converged") {
-			return "pending", nil
+			return "pending", "", nil
 		}
-		return "converged", nil
+		return "converged", "", nil
 	}
 	var payload struct {
 		AutoScalingGroups []struct {
-			Activities []struct {
+			AutoScalingGroupARN string `json:"AutoScalingGroupARN"`
+			Activities          []struct {
 				StatusCode string `json:"StatusCode"`
 				Progress   int    `json:"Progress"`
 			} `json:"Activities"`
@@ -411,12 +420,13 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (string, erro
 		} `json:"AutoScalingGroups"`
 	}
 	if err := json.Unmarshal(resp, &payload); err != nil {
-		return "", err
+		return "", "", err
 	}
 	if len(payload.AutoScalingGroups) == 0 {
-		return "pending", nil
+		return "pending", "", nil
 	}
 	group := payload.AutoScalingGroups[0]
+	arn = group.AutoScalingGroupARN
 	if DebugEnabled() {
 		for _, activity := range group.Activities {
 			if formatted := renderDebugTemplate(activity); formatted != "" {
@@ -427,20 +437,20 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (string, erro
 	for _, activity := range group.Activities {
 		switch strings.ToUpper(activity.StatusCode) {
 		case "SUCCESSFUL":
-			return "converged", nil
+			return "converged", arn, nil
 		case "FAILED":
-			return "failed", nil
+			return "failed", arn, nil
 		case "INPROGRESS":
-			return "pending", nil
+			return "pending", arn, nil
 		}
 	}
 	for _, instance := range group.Instances {
 		if strings.EqualFold(instance.LifecycleState, "InService") {
 			continue
 		}
-		return "pending", nil
+		return "pending", arn, nil
 	}
-	return "converged", nil
+	return "converged", arn, nil
 }
 
 func expectedPendingResources(contract scan.Contract) int {
@@ -495,8 +505,8 @@ func contractReportPath(contractPath string) string {
 	return filepath.Join(filepath.Dir(contractPath), stem+".convergence-report.json")
 }
 
-func writeAwaitReport(contractPath string, contract scan.Contract, status string, force bool) error {
-	updated := withObservationFulfilled(contract, status)
+func writeAwaitReport(contractPath string, contract scan.Contract, status string, force bool, waits []awaitResourceWait) error {
+	updated := withObservationMetadata(contract, waits, status)
 	reportPath := contractReportPath(contractPath)
 	if safePath, err := safeOutputFilePath(reportPath, force); err != nil {
 		return err
@@ -522,8 +532,14 @@ func writeAwaitReport(contractPath string, contract scan.Contract, status string
 	return os.WriteFile(reportPath, data, 0o644)
 }
 
-func withObservationFulfilled(contract scan.Contract, status string) scan.Contract {
+func withObservationMetadata(contract scan.Contract, waits []awaitResourceWait, status string) scan.Contract {
 	updated := contract
+	byAddress := map[string]time.Duration{}
+	for _, wait := range waits {
+		if wait.Address != "" {
+			byAddress[wait.Address] = wait.Wait
+		}
+	}
 	for i := range updated.Resources {
 		if updated.Resources[i].Observation.Fulfilled != nil {
 			if *updated.Resources[i].Observation.Fulfilled {
@@ -531,24 +547,30 @@ func withObservationFulfilled(contract scan.Contract, status string) scan.Contra
 			} else {
 				updated.Resources[i].Status = "pending"
 			}
-			continue
-		}
-		if strings.EqualFold(status, "converged") {
+		} else if strings.EqualFold(status, "converged") {
 			value := true
 			updated.Resources[i].Status = "converged"
 			updated.Resources[i].Observation.Fulfilled = &value
-			continue
-		}
-		if strings.EqualFold(status, "failed") || strings.EqualFold(status, "timeout") {
+		} else if strings.EqualFold(status, "failed") || strings.EqualFold(status, "timeout") {
 			value := false
 			updated.Resources[i].Status = "pending"
 			updated.Resources[i].Observation.Fulfilled = &value
-			continue
+		} else {
+			updated.Resources[i].Status = "pending"
+			updated.Resources[i].Observation.Fulfilled = nil
 		}
-		updated.Resources[i].Status = "pending"
-		updated.Resources[i].Observation.Fulfilled = nil
+		if wait, ok := byAddress[updated.Resources[i].Address]; ok {
+			seconds := float64(wait) / float64(time.Second)
+			updated.Resources[i].Observation.TimeSpent = &seconds
+		} else {
+			updated.Resources[i].Observation.TimeSpent = nil
+		}
 	}
 	return updated
+}
+
+func withObservationFulfilled(contract scan.Contract, status string) scan.Contract {
+	return withObservationMetadata(contract, nil, status)
 }
 
 func relativePathForCurrentWorkingDir(path string) string {

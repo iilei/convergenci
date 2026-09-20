@@ -63,8 +63,10 @@ type ContractItem struct {
 
 // Observation captures the AWS runtime strategy expected for the resource.
 type Observation struct {
-	Strategy  string `json:"strategy"`
-	Fulfilled *bool  `json:"fulfilled"`
+	Strategy  string   `json:"strategy"`
+	Fulfilled *bool    `json:"fulfilled"`
+	TimeSpent *float64 `json:"timeSpent"`
+	ARN       string   `json:"arn,omitempty"`
 }
 
 // LoadPlan reads a Terraform plan JSON file from disk.
