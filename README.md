@@ -14,6 +14,15 @@ Terraform answers: what should change?
 AWS answers: what actually happened?
 Convergenci answers: has the intended runtime state converged?
 
+```mermaid
+flowchart LR
+    A["terraform plan / apply"] --> B["convergenci scan"]
+    B --> C["convergence.json"]
+    C --> D["convergenci await"]
+    D --> E["AWS runtime state"]
+    D --> F["convergenci report"]
+```
+
 ## Scope
 
 The initial implementation is intentionally AWS-specific and focuses on:
