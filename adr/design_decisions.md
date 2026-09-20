@@ -79,6 +79,50 @@ convergenci await convergence.json
 
 It returns a non-zero exit code when convergence cannot be established, for example because the expected runtime operation failed or timed out.
 
+### Component overview
+
+```mermaid
+flowchart LR
+    subgraph CLI["cmd/convergenci"]
+        Main["main.go\nrun()"]
+    end
+
+    subgraph Core["internal/cli"]
+        Root["root.go\nCommand"]
+        Scan["scan.go\nexecuteScan"]
+        Await["await.go\nexecuteAwait / pollAwait"]
+        Report["report.go\nexecuteReport"]
+        Doctor["doctor.go\nexecuteDoctor"]
+        Logger["logger.go\ndebug templates"]
+    end
+
+    subgraph ScanPkg["internal/scan"]
+        Plan["plan.go\nBuildContract"]
+    end
+
+    subgraph AWSPkg["internal/awscmd"]
+        Cfg["awscli.go\nConfig.Run"]
+    end
+
+    AWSCLI[("aws CLI\nor fake-aws stub")]
+    Templates["templates/report-as-text.tmpl"]
+
+    Main --> Root
+    Root --> Scan
+    Root --> Await
+    Root --> Report
+    Root --> Doctor
+    Scan --> Plan
+    Await --> Plan
+    Await --> Cfg
+    Await --> Logger
+    Doctor --> Cfg
+    Report --> Templates
+    Cfg --> AWSCLI
+```
+
+`scan` and `await` share the `internal/scan` contract model but never call AWS directly from `internal/cli`; all AWS CLI invocations go through the single `internal/awscmd.Config.Run` seam, which is what the fake AWS CLI test binary substitutes.
+
 ---
 
 ## 4. Terraform Is an Input, Not the Runtime
@@ -213,20 +257,12 @@ This document is the contract between planning and observation.
 
 Conceptually:
 
-```text
-Terraform plan
-      │
-      ▼
-    scan
-      │
-      ▼
-convergence.json
-      │
-      ▼
-    await
-      │
-      ▼
- AWS observed state
+```mermaid
+flowchart TD
+    A["Terraform plan"] --> B["scan"]
+    B --> C["convergence.json"]
+    C --> D["await"]
+    D --> E["AWS observed state"]
 ```
 
 The manifest is schema-versioned.
@@ -549,6 +585,43 @@ A hanging AWS operation must not result in a process that waits forever.
 
 The exact defaults can be established during implementation.
 
+### Poll sequence
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant CLI as convergenci await
+    participant Poll as pollAwait
+    participant Obs as observeAWSResource
+    participant AWS as AWS CLI
+
+    U->>CLI: await convergence.json
+    CLI->>Poll: pollAwait(contract, timeout, interval)
+    Poll->>Poll: log retry_started (attempt 1)
+
+    loop until converged, failed, or timeout
+        Poll->>Obs: observe each resource concurrently
+        Obs->>AWS: describe-instance-refreshes
+        AWS-->>Obs: refresh status
+        Obs->>AWS: describe-auto-scaling-groups
+        AWS-->>Obs: tags, launch template, activities
+        Obs->>Obs: check desired_generation (tag / launch_template)
+        alt requirement unmet
+            Obs-->>Poll: status = pending, log desired_generation_pending
+        else requirement met or unverifiable
+            Obs-->>Poll: status = converged, log desired_generation_met
+        end
+        Poll->>Poll: log retry (pending resources)
+        Poll->>Poll: sleep(interval)
+    end
+
+    Poll-->>CLI: log retry_satisfied / timeout
+    CLI->>CLI: writeAwaitReport(...)
+    CLI-->>U: exit code (0, timeout, or failure)
+```
+
+Each retry iteration observes every resource in the contract concurrently; a single iteration is not scoped to one resource. Debug logging exposes which resources are still pending per iteration, and separately names any resource blocked on an unmet `desired_generation` requirement (e.g. a tag that has not yet rolled over), rather than only reporting an aggregate pending count.
+
 ---
 
 ## 17. Failure Semantics
@@ -590,6 +663,36 @@ non-zero
 A later runtime transition has replaced the originally correlated operation.
 
 Whether this is terminal or resolves to `CONVERGED` depends on whether the final observed state satisfies the original desired postcondition.
+
+### Per-resource convergence state
+
+Each resource in the contract moves through its own observation state independent of the overall `await` exit code:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: contract loaded
+
+    Pending --> Pending: refresh/activity in progress
+    Pending --> DesiredGenerationCheck: refresh/activity reports success
+
+    state DesiredGenerationCheck {
+        [*] --> Verifying
+        Verifying --> Unmet: tag or launch_template mismatch
+        Verifying --> Satisfied: value matches or unverifiable (grace period)
+    }
+
+    DesiredGenerationCheck --> Pending: Unmet
+    DesiredGenerationCheck --> Converged: Satisfied
+
+    Pending --> Failed: AWS reports Failed
+    Pending --> Timeout: await timeout elapses
+
+    Converged --> [*]
+    Failed --> [*]
+    Timeout --> [*]
+```
+
+A resource that AWS reports as fully rolled out (refresh/activity `Successful`, instances `InService`) is not immediately converged if a `desired_generation` requirement, such as a tag, has not yet rolled over in the observed data. Convergenci treats this as a grace period rather than a failure: it stays `Pending` and retries rather than reporting false convergence or false failure. A requirement that cannot be verified from the runtime response (e.g. the field is absent) is treated as satisfied, so the grace period does not apply if AWS never reports on it at all.
 
 ---
 
@@ -702,31 +805,19 @@ The tool exists specifically at that boundary.
 
 ## 22. Initial End-to-End Workflow
 
-```text
-terraform plan -out=tfplan
-        │
-        ▼
-terraform show -json tfplan > tfplan.json
-        │
-        ▼
-convergenci scan tfplan.json
-        │
-        ▼
-convergence.json
-        │
-        ▼
-terraform apply tfplan
-        │
-        ▼
-AWS changes
-        │
-        ▼
-convergenci await convergence.json
-        │
-        ├── CONVERGED
-        ├── SUPERSEDED
-        ├── FAILED
-        └── TIMEOUT
+```mermaid
+flowchart TD
+    A["terraform plan -out=tfplan"] --> B["terraform show -json tfplan > tfplan.json"]
+    B --> C["convergenci scan tfplan.json"]
+    C --> D["convergence.json"]
+    D --> E["terraform apply tfplan"]
+    E --> F["AWS changes"]
+    F --> G["convergenci await convergence.json"]
+    G --> H["CONVERGED"]
+    G --> I["SUPERSEDED"]
+    G --> J["FAILED"]
+    G --> K["TIMEOUT"]
+    H --> L["convergenci report convergence-report.json"]
 ```
 
 This is intentionally the complete initial product boundary.
