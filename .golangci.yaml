@@ -126,7 +126,23 @@ linters:
         linters:
           - errcheck
           - unparam
-        text: "always nil"
+      - path: '_test\.go'
+        linters:
+          # These catch real bugs in production code, but are low-value noise in
+          # tests: table-driven fixtures naturally repeat literals (goconst),
+          # tests commonly use weak/fixed values and permissive file modes on
+          # purpose (gosec), keeping tests in-package (testpackage) is this
+          # repo's convention so they can exercise unexported helpers, os.Setenv
+          # /os.Chdir over t.Setenv/t.Chdir (usetesting) is a style preference,
+          # and duplicated setup boilerplate (dupl) or bytes/strings mirror
+          # suggestions (mirror) are not worth the churn in test code.
+          - goconst
+          - gosec
+          - testpackage
+          - usetesting
+          - dupl
+          - mirror
+          - dupword
       - path: 'cmd/'
         linters:
           - errcheck
