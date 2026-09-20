@@ -105,7 +105,8 @@ func checkAWSCLI(cfg awscmd.Config) error {
 	if cfg.Profile != "" {
 		callerCmd.Args = append(
 			callerCmd.Args[:2],
-			append([]string{"--profile", cfg.Profile}, callerCmd.Args[2:]...)...)
+			append([]string{"--profile", cfg.Profile}, callerCmd.Args[2:]...)...,
+		)
 	}
 	callerOut, err := callerCmd.CombinedOutput()
 	if err != nil {
