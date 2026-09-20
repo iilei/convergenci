@@ -177,11 +177,10 @@ formatters:
         - github.com/iilei/convergenci-cli
     golines:
       max-len: 120
-    gofumpt:
-      extra:
-        group-params: true
-        clothe-returns: true
-        balance-calls: true
+    # gofumpt's "extra rules" (ExtraRules) is a single all-or-nothing switch,
+    # not the fine-grained group-params/clothe-returns/balance-calls toggles
+    # previously listed here; enabling it produced incorrect double-indented
+    # struct literals in multi-value returns. Left disabled (the default).
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
