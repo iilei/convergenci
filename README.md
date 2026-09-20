@@ -16,11 +16,32 @@ Convergenci answers: has the intended runtime state converged?
 
 ```mermaid
 flowchart LR
-    A["terraform plan / apply"] --> B["convergenci scan"]
-    B --> C["convergence.json"]
-    C --> D["convergenci await"]
-    D --> E["AWS runtime state"]
-    D --> F["convergenci report"]
+    subgraph P1["1 . plan"]
+        A["terraform plan -out=tfplan"] -->|"terraform CLI"| A2["tfplan.json"]
+    end
+
+    subgraph P2["2 . scan"]
+        B["convergenci scan\n(optional --assert-all-settled)"] -->|"AWS CLI"| B2["AWS runtime state"]
+        B --> C["convergence.json"]
+    end
+
+    subgraph P3["3 . apply"]
+        D["terraform apply tfplan"] -->|"terraform CLI"| D2["AWS"]
+    end
+
+    subgraph P4["4 . await"]
+        E["convergenci await"] -->|"AWS CLI"| E2["AWS runtime state"]
+        E --> F["convergence-report.json"]
+    end
+
+    subgraph P5["5 . report"]
+        G["convergenci report"] --> H["human-readable summary"]
+    end
+
+    A2 --> B
+    C --> D
+    D2 --> E
+    F --> G
 ```
 
 ## Scope
