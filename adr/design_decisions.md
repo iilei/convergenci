@@ -235,14 +235,18 @@ A conceptual structure is:
 
 ```json
 {
-  "schema_version": 1,
+        "schema_version": 2,
   "resources": [
     {
       "address": "aws_autoscaling_group.app",
       "kind": "aws_asg",
-      "desired_generation": {
-        "rotation_tag": "..."
-      },
+                        "desired_generation": [
+                                {
+                                        "type": "tag",
+                                        "key": "rotation",
+                                        "value": "..."
+                                }
+                        ],
       "observation": {
         "strategy": "instance_refresh"
       }

@@ -18,7 +18,7 @@ func TestReportCommandRendersConvergedReport(t *testing.T) {
 	reportJSON := `{
 		"status": "converged",
 		"resources": [
-			{"address": "module.app.aws_autoscaling_group.main", "status": "converged", "observation": {"strategy": "instance_refresh"}, "desired_generation": {"rotation": "bb"}}
+			{"address": "module.app.aws_autoscaling_group.main", "status": "converged", "observation": {"strategy": "instance_refresh"}, "desired_generation": [{"type": "tag", "key": "rotation", "value": "bb"}]}
 		]
 	}`
 	if err := os.WriteFile(reportPath, []byte(reportJSON), 0o644); err != nil {

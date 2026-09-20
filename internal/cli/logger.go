@@ -13,7 +13,14 @@ import (
 
 var logger = newLogger(false)
 
-const defaultDebugFormat = "[{{ .Level }} {{ .Timestamp }}] status={{ .Status }} pct={{ .PercentageComplete }}"
+const defaultDebugFormat = `[{{ .Level }} {{ .Timestamp }}]{{- " " -}}
+{{- if or (eq .Event "retry_started") (eq .Event "retry_satisfied") -}}
+    === {{ .Event }} {{ .RetryIteration }}/{{ .RetryLimit }} resources={{ join ", " .ResourceNames }} converged={{ join ", " .ConvergedResources }} elapsed={{ .Elapsed }} ===
+{{- else if eq .Event "retry" -}}
+	retry={{ .RetryIteration }}/{{ .RetryLimit }} pending={{ join ", " .PendingResources }} elapsed={{- .Elapsed }}
+{{- else -}}
+    source={{ .Source }} resource={{ .Resource }} status={{ .Status }} pct={{ .PercentageComplete }}
+{{- end -}}`
 
 func newLogger(enabled bool) *loggerState {
 	return &loggerState{enabled: enabled}
@@ -84,7 +91,11 @@ func ConfigureDebugFormat(raw string) error {
 		logger.prefixMode = false
 		return nil
 	}
-	tpl, err := template.New("debug").Option("missingkey=zero").Parse(raw)
+	tpl, err := template.New("debug").Funcs(template.FuncMap{
+		"join": func(separator string, values []string) string {
+			return strings.Join(values, separator)
+		},
+	}).Option("missingkey=zero").Parse(raw)
 	if err != nil {
 		return err
 	}

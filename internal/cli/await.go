@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -243,6 +244,7 @@ func preferAwaitBaseline(contract, baseline scan.Contract) scan.Contract {
 
 type awaitResourceWait struct {
 	Address string
+	Name    string
 	Status  string
 	Wait    time.Duration
 }
@@ -277,18 +279,53 @@ func pollAwait(contract scan.Contract, timeout, interval time.Duration, cmdCfg a
 		}
 	}
 	for attempt := 1; ; attempt++ {
+		if DebugEnabled() && attempt == 1 {
+			if formatted := renderDebugTemplate(map[string]any{
+				"Event":              "retry_started",
+				"RetryIteration":     attempt,
+				"RetryLimit":         maxAttempts,
+				"Elapsed":            time.Since(start).Round(time.Second),
+				"ResourceNames":      contractResourceNames(contract),
+				"ConvergedResources": []string{},
+			}); formatted != "" {
+				logger.logLine(formatted)
+			}
+		}
 		pending, converged, status, message, waits, err := awsContractState(contract, cmdCfg)
 		if err != nil {
 			return awaitPollResult{Status: "failed", Message: err.Error(), ExitCode: codeGenericFailure, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, err
 		}
 		if status == "converged" {
+			if DebugEnabled() && attempt > 1 && attempt < maxAttempts {
+				if formatted := renderDebugTemplate(map[string]any{
+					"Event":                 "retry_satisfied",
+					"Status":                status,
+					"Message":               message,
+					"RetryIteration":        attempt,
+					"RetryLimit":            maxAttempts,
+					"Elapsed":               time.Since(start).Round(time.Second),
+					"ResourceNames":         contractResourceNames(contract),
+					"ConvergedResources":    waitResourceNames(waits, "converged"),
+					"AllResourcesConverged": true,
+				}); formatted != "" {
+					logger.logLine(formatted)
+				}
+			}
 			return awaitPollResult{Status: "converged", Message: message, ExitCode: 0, Pending: 0, Converged: converged, ResourceWaits: waits, Contract: contract}, nil
 		}
 		if status == "failed" {
 			return awaitPollResult{Status: "failed", Message: message, ExitCode: codeGenericFailure, Pending: pending, Converged: converged, ResourceWaits: waits, Contract: contract}, &ExitCodeError{Code: codeGenericFailure, Message: message}
 		}
 		if DebugEnabled() {
-			Debugf("retry %d/%d (elapsed %s)", attempt, maxAttempts, time.Since(start).Round(time.Second))
+			if formatted := renderDebugTemplate(map[string]any{
+				"Event":            "retry",
+				"RetryIteration":   attempt,
+				"RetryLimit":       maxAttempts,
+				"Elapsed":          time.Since(start).Round(time.Second),
+				"PendingResources": waitResourceNames(waits, "pending"),
+			}); formatted != "" {
+				logger.logLine(formatted)
+			}
 		}
 		if timeout > 0 && time.Since(start) >= timeout {
 			fmt.Fprintf(os.Stderr, "timeout reached after %s\n", time.Since(start).Round(time.Second))
@@ -333,10 +370,10 @@ func awsContractState(contract scan.Contract, cfg awscmd.Config) (pending int, c
 				contract.Resources[idx].Observation.ARN = arn
 			}
 			if runtimeErr != nil {
-				waits = append(waits, awaitResourceWait{Address: item.Address, Status: "failed", Wait: elapsed})
+				waits = append(waits, awaitResourceWait{Address: item.Address, Name: item.Name, Status: "failed", Wait: elapsed})
 				return
 			}
-			waits = append(waits, awaitResourceWait{Address: item.Address, Status: observed, Wait: elapsed})
+			waits = append(waits, awaitResourceWait{Address: item.Address, Name: item.Name, Status: observed, Wait: elapsed})
 			if observed == "converged" {
 				converged++
 				return
@@ -365,6 +402,35 @@ func awsContractState(contract scan.Contract, cfg awscmd.Config) (pending int, c
 	return pending, converged, "pending", fmt.Sprintf("%d resource(s) remain pending", pending), waits, nil
 }
 
+func contractResourceNames(contract scan.Contract) []string {
+	names := make([]string, 0, len(contract.Resources))
+	for _, item := range contract.Resources {
+		name := item.Name
+		if name == "" {
+			name = item.Address
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func waitResourceNames(waits []awaitResourceWait, status string) []string {
+	names := make([]string, 0, len(waits))
+	for _, wait := range waits {
+		if wait.Status != status {
+			continue
+		}
+		name := wait.Name
+		if name == "" {
+			name = wait.Address
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 func countRuntimeErrors(waits []awaitResourceWait) int {
 	count := 0
 	for _, wait := range waits {
@@ -391,13 +457,26 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status strin
 	if err == nil {
 		var payload struct {
 			InstanceRefreshes []struct {
-				Status             string `json:"Status"`
-				PercentageComplete int    `json:"PercentageComplete"`
+				AutoScalingGroupName string `json:"AutoScalingGroupName"`
+				InstanceRefreshID    string `json:"InstanceRefreshId"`
+				Status               string `json:"Status"`
+				PercentageComplete   int    `json:"PercentageComplete"`
+				CompletedAt          any    `json:"CompletedAt"`
 			} `json:"InstanceRefreshes"`
 		}
 		if json.Unmarshal(resp, &payload) == nil && len(payload.InstanceRefreshes) > 0 {
 			if DebugEnabled() {
-				if formatted := renderDebugTemplate(payload.InstanceRefreshes[0]); formatted != "" {
+				refresh := payload.InstanceRefreshes[0]
+				if formatted := renderDebugTemplate(map[string]any{
+					"Event":              "instance_refresh",
+					"Source":             "instance_refresh",
+					"Resource":           item.Address,
+					"AutoScalingGroup":   refresh.AutoScalingGroupName,
+					"InstanceRefreshID":  refresh.InstanceRefreshID,
+					"Status":             refresh.Status,
+					"PercentageComplete": refresh.PercentageComplete,
+					"CompletedAt":        refresh.CompletedAt,
+				}); formatted != "" {
 					logger.logLine(formatted)
 				}
 			}
@@ -432,8 +511,10 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status strin
 	}
 	var payload struct {
 		AutoScalingGroups []struct {
-			AutoScalingGroupARN string `json:"AutoScalingGroupARN"`
-			Activities          []struct {
+			AutoScalingGroupName string `json:"AutoScalingGroupName"`
+			AutoScalingGroupARN  string `json:"AutoScalingGroupARN"`
+			Activities           []struct {
+				Cause      string `json:"Cause"`
 				StatusCode string `json:"StatusCode"`
 				Progress   int    `json:"Progress"`
 			} `json:"Activities"`
@@ -456,8 +537,13 @@ func observeAWSResource(item scan.ContractItem, cfg awscmd.Config) (status strin
 	if DebugEnabled() {
 		for _, activity := range group.Activities {
 			if formatted := renderDebugTemplate(map[string]any{
+				"Event":              "autoscaling_activity",
+				"Source":             "autoscaling_activity",
+				"Resource":           item.Address,
+				"AutoScalingGroup":   group.AutoScalingGroupName,
 				"Status":             activity.StatusCode,
 				"PercentageComplete": activity.Progress,
+				"Cause":              activity.Cause,
 			}); formatted != "" {
 				logger.logLine(formatted)
 			}
@@ -535,9 +621,7 @@ func awaitSummaryReport(path, status, message string, contract scan.Contract, ti
 func contractReportPath(contractPath string) string {
 	name := filepath.Base(contractPath)
 	stem := strings.TrimSuffix(name, filepath.Ext(name))
-	if strings.HasSuffix(stem, ".convergence") {
-		stem = strings.TrimSuffix(stem, ".convergence")
-	}
+	stem = strings.TrimSuffix(stem, ".convergence")
 	if stem == "" {
 		stem = ".convergence"
 	}

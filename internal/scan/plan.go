@@ -55,12 +55,19 @@ type Contract struct {
 
 // ContractItem is a single resource expectation in the convergence contract.
 type ContractItem struct {
-	Address           string         `json:"address"`
-	Kind              string         `json:"kind"`
-	Name              string         `json:"name,omitempty"`
-	Status            string         `json:"status,omitempty"`
-	DesiredGeneration map[string]any `json:"desired_generation"`
-	Observation       Observation    `json:"observation"`
+	Address           string                  `json:"address"`
+	Kind              string                  `json:"kind"`
+	Name              string                  `json:"name,omitempty"`
+	Status            string                  `json:"status,omitempty"`
+	DesiredGeneration []GenerationRequirement `json:"desired_generation"`
+	Observation       Observation             `json:"observation"`
+}
+
+// GenerationRequirement identifies one desired runtime generation factor.
+type GenerationRequirement struct {
+	Type  string `json:"type"`
+	Key   string `json:"key"`
+	Value any    `json:"value"`
 }
 
 // Observation captures the AWS runtime strategy expected for the resource.
@@ -98,7 +105,7 @@ func BuildContract(plan TerraformPlan, policy RecordPolicy, addressRegex string,
 	paths := append([]string{}, policy.DefaultPaths...)
 	paths = append(paths, extraIndicators...)
 
-	contract := Contract{SchemaVersion: 1}
+	contract := Contract{SchemaVersion: 2}
 	for _, change := range plan.ResourceChanges {
 		if change.Type != policy.ResourceType {
 			continue
@@ -107,20 +114,18 @@ func BuildContract(plan TerraformPlan, policy RecordPolicy, addressRegex string,
 			continue
 		}
 
-		value, key, ok := firstIndicatorValue(change.Change.After, paths)
-		if !ok {
+		requirements := indicatorValues(change.Change.After, paths)
+		if len(requirements) == 0 {
 			continue
 		}
 
 		name, _ := resourceName(change)
 		entry := ContractItem{
-			Address: change.Address,
-			Kind:    "aws_asg",
-			Name:    name,
-			DesiredGeneration: map[string]any{
-				key: value,
-			},
-			Observation: Observation{Strategy: "instance_refresh"},
+			Address:           change.Address,
+			Kind:              "aws_asg",
+			Name:              name,
+			DesiredGeneration: requirements,
+			Observation:       Observation{Strategy: "instance_refresh"},
 		}
 		contract.Resources = append(contract.Resources, entry)
 	}
@@ -180,16 +185,31 @@ func stringValue(obj map[string]any, path string) (string, bool) {
 	return s, true
 }
 
-// firstIndicatorValue walks indicator paths in order and returns the first non-empty value.
-func firstIndicatorValue(obj map[string]any, paths []string) (any, string, bool) {
+// indicatorValues returns every matching indicator in policy order.
+func indicatorValues(obj map[string]any, paths []string) []GenerationRequirement {
+	var requirements []GenerationRequirement
 	for _, p := range paths {
 		value, ok := nestedValue(obj, p)
 		if !ok {
 			continue
 		}
-		return value, indicatorKey(p), true
+		requirements = append(requirements, GenerationRequirement{
+			Type:  indicatorType(p),
+			Key:   indicatorKey(p),
+			Value: value,
+		})
 	}
-	return nil, "", false
+	return requirements
+}
+
+func indicatorType(path string) string {
+	if strings.HasPrefix(path, "tag.") {
+		return "tag"
+	}
+	if strings.Contains(path, "launch_template") {
+		return "launch_template"
+	}
+	return "indicator"
 }
 
 func indicatorKey(path string) string {

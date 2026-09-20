@@ -87,6 +87,88 @@ func TestConfigureDebugFormatRendersProgress(t *testing.T) {
 	}
 }
 
+func TestConfigureDebugFormatRendersRetryFields(t *testing.T) {
+	SetDebug(true)
+	defer SetDebug(false)
+
+	if err := ConfigureDebugFormat("{{ .Event }} {{ .RetryIteration }}/{{ .RetryLimit }} {{ .Elapsed }}"); err != nil {
+		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
+	}
+
+	got := renderDebugTemplate(map[string]any{
+		"Event":          "retry",
+		"RetryIteration": 2,
+		"RetryLimit":     10,
+		"Elapsed":        "5s",
+	})
+	if got != "retry 2/10 5s" {
+		t.Fatalf("renderDebugTemplate = %q, want %q", got, "retry 2/10 5s")
+	}
+}
+
+func TestConfigureDebugFormatRendersRetryLifecycleFields(t *testing.T) {
+	SetDebug(true)
+	defer SetDebug(false)
+
+	if err := ConfigureDebugFormat("{{ .Event }} {{ .RetryIteration }}/{{ .RetryLimit }} {{ join \",\" .ResourceNames }} {{ .Elapsed }}"); err != nil {
+		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
+	}
+
+	for _, event := range []string{"retry_started", "retry_satisfied"} {
+		got := renderDebugTemplate(map[string]any{
+			"Event":          event,
+			"RetryIteration": 1,
+			"RetryLimit":     10,
+			"ResourceNames":  []string{"web-asg", "worker-asg"},
+			"Elapsed":        "0s",
+		})
+		want := event + " 1/10 web-asg,worker-asg 0s"
+		if got != want {
+			t.Fatalf("renderDebugTemplate(%q) = %q, want %q", event, got, want)
+		}
+	}
+}
+
+func TestConfigureDebugFormatRendersSatisfiedRetryFields(t *testing.T) {
+	SetDebug(true)
+	defer SetDebug(false)
+
+	if err := ConfigureDebugFormat("{{ .Event }} {{ .RetryIteration }}/{{ .RetryLimit }} {{ .Status }} {{ .Message }}"); err != nil {
+		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
+	}
+
+	got := renderDebugTemplate(map[string]any{
+		"Event":          "retry_satisfied",
+		"RetryIteration": 2,
+		"RetryLimit":     10,
+		"Status":         "converged",
+		"Message":        "all expected resources converged",
+	})
+	if got != "retry_satisfied 2/10 converged all expected resources converged" {
+		t.Fatalf("renderDebugTemplate = %q, want satisfied retry fields", got)
+	}
+}
+
+func TestConfigureDebugFormatRendersObservationFields(t *testing.T) {
+	SetDebug(true)
+	defer SetDebug(false)
+
+	if err := ConfigureDebugFormat("{{ .Event }} {{ .Resource }} {{ .Status }} {{ .PercentageComplete }} {{ .Cause }}"); err != nil {
+		t.Fatalf("ConfigureDebugFormat returned error: %v", err)
+	}
+
+	got := renderDebugTemplate(map[string]any{
+		"Event":              "autoscaling_activity",
+		"Resource":           "asg.web",
+		"Status":             "InProgress",
+		"PercentageComplete": 62,
+		"Cause":              "launching instance",
+	})
+	if got != "autoscaling_activity asg.web InProgress 62 launching instance" {
+		t.Fatalf("renderDebugTemplate = %q, want observation fields", got)
+	}
+}
+
 func TestConfigureDebugFormatSupportsPrefixAndTimestamp(t *testing.T) {
 	SetDebug(true)
 	defer SetDebug(false)

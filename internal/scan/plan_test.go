@@ -20,12 +20,9 @@ func TestBuildContractDefaultASGRotation(t *testing.T) {
 		t.Fatalf("len(resources) = %d, want 1", len(contract.Resources))
 	}
 
-	got, ok := contract.Resources[0].DesiredGeneration["rotation"]
-	if !ok {
-		t.Fatalf("desired generation missing rotation key: %#v", contract.Resources[0].DesiredGeneration)
-	}
-	if got != "bb" {
-		t.Fatalf("desired generation = %#v, want %q", got, "bb")
+	got := contract.Resources[0].DesiredGeneration
+	if len(got) != 2 || got[0].Type != "tag" || got[0].Key != "rotation" || got[0].Value != "bb" || got[1].Type != "launch_template" || got[1].Key != "version" || got[1].Value != "6" {
+		t.Fatalf("desired generation = %#v, want tag rotation=bb and launch_template version=6", got)
 	}
 }
 
@@ -43,12 +40,9 @@ func TestBuildContractCustomTagRotation(t *testing.T) {
 		t.Fatalf("len(resources) = %d, want 1", len(contract.Resources))
 	}
 
-	got, ok := contract.Resources[0].DesiredGeneration["rotation"]
-	if !ok {
-		t.Fatalf("desired generation missing rotation key: %#v", contract.Resources[0].DesiredGeneration)
-	}
-	if got != "v2" {
-		t.Fatalf("desired generation = %#v, want %q", got, "v2")
+	got := contract.Resources[0].DesiredGeneration
+	if len(got) != 1 || got[0].Type != "tag" || got[0].Key != "rotation" || got[0].Value != "v2" {
+		t.Fatalf("desired generation = %#v, want tag rotation=v2", got)
 	}
 }
 
@@ -66,12 +60,9 @@ func TestBuildContractMixedInstancePolicyVersion(t *testing.T) {
 		t.Fatalf("len(resources) = %d, want 1", len(contract.Resources))
 	}
 
-	got, ok := contract.Resources[0].DesiredGeneration["version"]
-	if !ok {
-		t.Fatalf("desired generation missing version key: %#v", contract.Resources[0].DesiredGeneration)
-	}
-	if got != "4" {
-		t.Fatalf("desired generation = %#v, want %q", got, "4")
+	got := contract.Resources[0].DesiredGeneration
+	if len(got) != 1 || got[0].Type != "launch_template" || got[0].Key != "version" || got[0].Value != "4" {
+		t.Fatalf("desired generation = %#v, want launch_template version=4", got)
 	}
 }
 
@@ -93,12 +84,9 @@ func TestBuildContractNestedModuleComplexAddress(t *testing.T) {
 		t.Fatalf("address = %q, want nested module ASG address", contract.Resources[0].Address)
 	}
 
-	got, ok := contract.Resources[0].DesiredGeneration["rotation"]
-	if !ok {
-		t.Fatalf("desired generation missing rotation key: %#v", contract.Resources[0].DesiredGeneration)
-	}
-	if got != "green" {
-		t.Fatalf("desired generation = %#v, want %q", got, "green")
+	got := contract.Resources[0].DesiredGeneration
+	if len(got) != 2 || got[0].Type != "tag" || got[0].Key != "rotation" || got[0].Value != "green" || got[1].Type != "launch_template" || got[1].Key != "version" || got[1].Value != "4" {
+		t.Fatalf("desired generation = %#v, want tag rotation=green and launch_template version=4", got)
 	}
 }
 
@@ -158,8 +146,35 @@ func TestBuildContractFiltersChangesAndUsesCustomIndicators(t *testing.T) {
 	if resource.Name != "custom-name" {
 		t.Fatalf("resource name = %q, want %q", resource.Name, "custom-name")
 	}
-	if got := resource.DesiredGeneration["custom"]; got != "generation-7" {
-		t.Fatalf("desired generation = %#v, want %q", got, "generation-7")
+	if len(resource.DesiredGeneration) != 1 || resource.DesiredGeneration[0].Type != "indicator" || resource.DesiredGeneration[0].Key != "custom" || resource.DesiredGeneration[0].Value != "generation-7" {
+		t.Fatalf("desired generation = %#v, want indicator custom=generation-7", resource.DesiredGeneration)
+	}
+}
+
+func TestBuildContractCollectsMultipleGenerationRequirements(t *testing.T) {
+	plan := TerraformPlan{ResourceChanges: []ResourceChange{{
+		Address: "aws_autoscaling_group.example",
+		Type:    "aws_autoscaling_group",
+		Change: Change{After: map[string]any{
+			"tag":             map[string]any{"rotation": "green"},
+			"launch_template": map[string]any{"version": "4"},
+			"name":            "example",
+		}},
+	}}}
+
+	contract, err := BuildContract(plan, ASGDefaultPolicy, "", nil)
+	if err != nil {
+		t.Fatalf("BuildContract returned error: %v", err)
+	}
+	got := contract.Resources[0].DesiredGeneration
+	if len(got) != 2 {
+		t.Fatalf("len(desired generation) = %d, want 2: %#v", len(got), got)
+	}
+	if got[0] != (GenerationRequirement{Type: "tag", Key: "rotation", Value: "green"}) {
+		t.Fatalf("first requirement = %#v, want tag rotation=green", got[0])
+	}
+	if got[1] != (GenerationRequirement{Type: "launch_template", Key: "version", Value: "4"}) {
+		t.Fatalf("second requirement = %#v, want launch_template version=4", got[1])
 	}
 }
 

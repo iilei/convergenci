@@ -206,9 +206,9 @@ func TestScanCommandWritesConvergenceContract(t *testing.T) {
 	}
 	got := string(data)
 	for _, want := range []string{
-		"\"schema_version\": 1",
+		"\"schema_version\": 2",
 		"module.app.aws_autoscaling_group.main",
-		"\"rotation\": \"bb\"",
+		"\"key\": \"rotation\"",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("contract output = %q, want it to contain %q", got, want)
@@ -302,7 +302,7 @@ func TestAwaitCommandFlagAfterPositionalPath(t *testing.T) {
 	t.Setenv("FAKE_AWS_SCENARIO", "success")
 	tempDir := t.TempDir()
 	contractPath := filepath.Join(tempDir, "contract.json")
-	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", Name: "app-asg", DesiredGeneration: map[string]any{"rotation": "v2"}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
+	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", Name: "app-asg", DesiredGeneration: []scan.GenerationRequirement{{Type: "tag", Key: "rotation", Value: "v2"}}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
 	payload, err := json.Marshal(contract)
 	if err != nil {
 		t.Fatalf("json.Marshal returned error: %v", err)
@@ -338,7 +338,7 @@ func TestAwaitCommandUsesEnvDefaultTimeoutAndInterval(t *testing.T) {
 
 	tempDir := t.TempDir()
 	contractPath := filepath.Join(tempDir, "contract.json")
-	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", Status: "converged", DesiredGeneration: map[string]any{"rotation": "v2"}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
+	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", Status: "converged", DesiredGeneration: []scan.GenerationRequirement{{Type: "tag", Key: "rotation", Value: "v2"}}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
 	payload, err := json.Marshal(contract)
 	if err != nil {
 		t.Fatalf("json.Marshal returned error: %v", err)
@@ -360,7 +360,7 @@ func TestAwaitCommandUsesEnvDefaultTimeoutAndInterval(t *testing.T) {
 }
 
 func TestAwaitSummaryReportCountsConvergedResources(t *testing.T) {
-	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", DesiredGeneration: map[string]any{"rotation": "v2"}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
+	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", DesiredGeneration: []scan.GenerationRequirement{{Type: "tag", Key: "rotation", Value: "v2"}}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
 
 	report := awaitSummaryReport("/tmp/example.convergence.json", "converged", "all expected resources converged", contract)
 	if report.ExpectedResources != 1 {
@@ -375,7 +375,7 @@ func TestAwaitSummaryReportCountsConvergedResources(t *testing.T) {
 }
 
 func TestAwaitReportWriting(t *testing.T) {
-	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", DesiredGeneration: map[string]any{"rotation": "v2"}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
+	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", DesiredGeneration: []scan.GenerationRequirement{{Type: "tag", Key: "rotation", Value: "v2"}}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
 
 	tempDir := t.TempDir()
 	contractPath := filepath.Join(tempDir, "example.convergence.json")
@@ -432,7 +432,7 @@ func TestLoadAwaitBaselineReadsSidecarFile(t *testing.T) {
 }
 
 func TestWithObservationFulfilledSetsEffectiveStatus(t *testing.T) {
-	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", Status: "pending", DesiredGeneration: map[string]any{"rotation": "v2"}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
+	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", Status: "pending", DesiredGeneration: []scan.GenerationRequirement{{Type: "tag", Key: "rotation", Value: "v2"}}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
 
 	updated := withObservationFulfilled(contract, "converged")
 	if len(updated.Resources) != 1 {
@@ -450,9 +450,9 @@ func TestWithObservationFulfilledPreservesMixedResourceState(t *testing.T) {
 	trueValue := true
 	falseValue := false
 	contract := scan.Contract{Resources: []scan.ContractItem{
-		{Address: "asg.web_frontend", Kind: "aws_asg", Status: "pending", DesiredGeneration: map[string]any{"rotation": 2}, Observation: scan.Observation{Strategy: "instance_refresh", Fulfilled: &trueValue}},
-		{Address: "asg.api_backend", Kind: "aws_asg", Status: "pending", DesiredGeneration: map[string]any{"rotation": 1}, Observation: scan.Observation{Strategy: "instance_refresh", Fulfilled: &trueValue}},
-		{Address: "asg.worker_batch", Kind: "aws_asg", Status: "pending", DesiredGeneration: map[string]any{"rotation": 3}, Observation: scan.Observation{Strategy: "instance_refresh", Fulfilled: &falseValue}},
+		{Address: "asg.web_frontend", Kind: "aws_asg", Status: "pending", DesiredGeneration: []scan.GenerationRequirement{{Type: "tag", Key: "rotation", Value: 2}}, Observation: scan.Observation{Strategy: "instance_refresh", Fulfilled: &trueValue}},
+		{Address: "asg.api_backend", Kind: "aws_asg", Status: "pending", DesiredGeneration: []scan.GenerationRequirement{{Type: "tag", Key: "rotation", Value: 1}}, Observation: scan.Observation{Strategy: "instance_refresh", Fulfilled: &trueValue}},
+		{Address: "asg.worker_batch", Kind: "aws_asg", Status: "pending", DesiredGeneration: []scan.GenerationRequirement{{Type: "tag", Key: "rotation", Value: 3}}, Observation: scan.Observation{Strategy: "instance_refresh", Fulfilled: &falseValue}},
 	}}
 
 	updated := withObservationFulfilled(contract, "pending")
@@ -465,7 +465,7 @@ func TestWithObservationFulfilledPreservesMixedResourceState(t *testing.T) {
 }
 
 func TestAwaitTimeoutReportsToStderr(t *testing.T) {
-	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", DesiredGeneration: map[string]any{"rotation": "v2"}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
+	contract := scan.Contract{Resources: []scan.ContractItem{{Address: "module.app.aws_autoscaling_group.main", Kind: "aws_asg", DesiredGeneration: []scan.GenerationRequirement{{Type: "tag", Key: "rotation", Value: "v2"}}, Observation: scan.Observation{Strategy: "instance_refresh"}}}}
 	t.Setenv("FAKE_AWS_SCENARIO", "in-progress")
 
 	old := os.Stderr

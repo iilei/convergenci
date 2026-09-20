@@ -47,15 +47,15 @@ For the current iteration, the only built-in checker is the ASG instance-refresh
 
 4. Extract the rotation indicator
    - inspect `change.after` for each candidate
-   - walk each configured indicator path in order
-   - for each path, read the nested value if it exists
-   - use the first non-empty value as the desired generation signal
+  - walk each configured indicator path in order
+  - for each path, read the nested value if it exists
+  - collect every non-empty value as a desired generation requirement
    - treat non-existent or empty values as “not present”
 
 5. Build the convergence contract entry
    - `address`: Terraform resource address
    - `kind`: `aws_asg`
-   - `desired_generation`: the chosen rotation indicator value
+  - `desired_generation`: an array of typed generation requirements
    - `observation.strategy`: `instance_refresh`
    - optionally include `source_indicator` for debugging/audit output
 
@@ -73,14 +73,18 @@ For the current iteration, the only built-in checker is the ASG instance-refresh
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "resources": [
     {
       "address": "module.app.aws_autoscaling_group.main",
       "kind": "aws_asg",
-      "desired_generation": {
-        "rotation": "bb"
-      },
+      "desired_generation": [
+        {
+          "type": "tag",
+          "key": "rotation",
+          "value": "bb"
+        }
+      ],
       "observation": {
         "strategy": "instance_refresh"
       }
