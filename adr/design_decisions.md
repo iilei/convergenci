@@ -284,43 +284,44 @@ The convergence condition needs both:
 
 ---
 
-## 10. Concurrency and Supersession
+## 10. Concurrency Is Assumed Away by a Lock, Not Resolved by Correlation
 
-Multiple applies may overlap or a later desired generation may supersede an earlier one.
+An earlier version of this design assumed that multiple applies could overlap or that a later desired generation could supersede an earlier one, and it introduced a `SUPERSEDED` status to reason about that.
 
-Example:
+That complexity is unnecessary if the caller guarantees, via a Terraform state lock (or equivalent serialization), that at most one relevant apply is in flight at a time. Convergenci does not need to invent its own locking; it only needs to assume the caller provides one and verify that assumption holds immediately before `apply` (see Section 14, `--assert-all-settled`).
+
+Under that assumption, correlation no longer has to resolve conflicts between competing changes. It only has to answer:
+
+> Which AWS runtime operation was caused by *this* apply?
+
+That is a **before/after boundary problem**, not a supersession-chain problem:
 
 ```text
-A: rotation = aa
-B: rotation = bb
-C: rotation = aa
+before apply:
+    InstanceRefreshId = abc
+    rotation           = v1
+
+plan:
+    rotation = v2
+
+after apply:
+    InstanceRefreshId = def   (new)
+    rotation           = v2
 ```
 
-A naive implementation could conclude that A failed because B happened afterward.
+`def` is identified as the operation to wait for because it is new relative to the recorded pre-apply state, not because of any ranking against other operations.
 
-That is not necessarily correct.
-
-If the final desired state is `aa` and C successfully brought the ASG to that generation, the system may have converged even though the original runtime operation associated with A is no longer the operation that matters.
-
-Therefore Convergenci distinguishes between:
-
-- the exact runtime operation originally correlated with the intent
-- the final convergence of the desired state
-
-The initial status model is:
+The status model is therefore reduced to:
 
 ```text
 CONVERGED
-SUPERSEDED
 FAILED
 TIMEOUT
 ```
 
-`CONVERGED` means the required postcondition has been established.
+with `NOT_STARTED` / `UNKNOWN` used only as internal, non-terminal states while polling.
 
-`SUPERSEDED` means the original transition was overtaken by a later transition. Whether that is terminal depends on whether the final observed state satisfies the original desired postcondition.
-
-The precise distinction should be defined by the ASG implementation rather than by a generic abstraction.
+`SUPERSEDED` is removed from the product. Terraform resource address, desired generation, and the pre-apply AWS state remain sufficient to identify the runtime operation to observe; the postcondition in the convergence contract remains the authority on what "converged" means, since a runtime identifier alone (e.g. an `InstanceRefreshId`) is not always sufficient to prove the desired state was reached.
 
 ---
 
@@ -396,6 +397,60 @@ Go is responsible for:
 - ECS observation logic
 
 The implementation should favor straightforward code over abstraction-heavy framework design.
+
+---
+
+## 14. `--assert-all-settled` and Lock-Based Correlation
+
+`--assert-all-settled` is a global flag (not a subcommand) that runs after `scan` and before `terraform apply`:
+
+```text
+convergenci scan tfplan.json
+        ↓
+convergence.json
+
+convergenci --assert-all-settled <asg-name> [asg-name...]
+        ↓
+"nothing relevant is currently converging"
+
+terraform apply tfplan
+
+convergenci await convergence.json
+        ↓
+"the change described by this contract has converged"
+```
+
+It takes resource names directly (currently Auto Scaling Group names) rather than a convergence contract path. It does not read or write any file: it is a stateless, point-in-time AWS check.
+
+Its responsibility is limited to: for each named resource, observe AWS and fail (non-zero exit) if a relevant runtime operation is currently in progress (e.g. an ASG instance refresh already running or pending). This protects against running `apply` while a prior rotation has not finished. It dispatches by resource kind; ASG is the only kind implemented today, and future kinds (e.g. ECS) would be added the same way.
+
+This command relies on the caller holding a Terraform state lock (or otherwise serializing applies) for the duration of `apply`. Convergenci does not implement locking itself; it only asserts, at one point in time, that the precondition the lock is meant to guarantee actually holds.
+
+Given that guarantee, correlation is reduced to:
+
+```text
+Terraform resource address
+        +
+expected generation/trigger
+        +
+pre-apply "not currently converging" assertion
+        ↓
+identify the AWS operation caused by this apply
+        ↓
+wait for it
+        ↓
+verify postcondition
+```
+
+This removes the need for supersession handling (Section 10) while keeping the existing contract-based postcondition model (Section 7) unchanged: the contract still defines what "converged" means, `--assert-all-settled` only establishes that nothing was already in flight before the apply.
+
+Because `--assert-all-settled` does not persist a pre-apply runtime ID anywhere, `await` currently has no baseline to distinguish "the instance refresh caused by this apply" from one that started between the assertion and `apply` outside of the lock's protection. In practice the lock is expected to prevent that gap; if stronger before/after correlation is needed later, a baseline artifact could be reintroduced without changing `--assert-all-settled`'s stateless contract-free interface.
+
+### Test coverage gap: Terragrunt-style environments
+
+The current fake-AWS test bench (`testdata/fake-aws`) exercises `scan`/`await` against a single Terraform plan. `--assert-all-settled` additionally needs coverage for **multi-module, Terragrunt-style layouts**, where several stacks/modules apply against overlapping or related AWS resources and locking happens per-module rather than globally.
+
+Before extending `--assert-all-settled` further, add test benches that mimic a Terragrunt environment (multiple plan files/modules, multiple ASGs, and a shared or per-module lock) so the "settled" check can be verified against realistic multi-stack scans, not just a single flat plan.
 
 ---
 
