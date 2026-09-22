@@ -34,6 +34,7 @@ If you still want to put the shim on `PATH`, that is optional, but it is not req
 - `in-progress-then-success` — a transitional mode that stays in progress before eventually succeeding
 - `terragrunt-multi-stack` — a transitional mode for the multi-stack Terragrunt-style bench
 - `in-progress-then-failed` — a transitional mode that stays in progress before eventually failing
+- `not-started` — returns no current instance refresh and keeps the ASG on the old, verifiable generation so `await` stays pending before rotation begins
 
 These scenarios are meant to exercise the exact guardrail and polling behavior used by the `scan --assert-all-settled` and `await` flows, without introducing a real AWS dependency.
 

@@ -346,7 +346,24 @@ func main() {
 		switch subcommand {
 		case "describe-auto-scaling-groups":
 			if scenario == "not-started" {
-				response := asgResponse(asgName, "aa", "5", "Successful", 100)
+				response := map[string]any{
+					"AutoScalingGroups": []map[string]any{{
+						"AutoScalingGroupName": asgName,
+						"AutoScalingGroupARN":  fakeASGARN(asgName),
+						"DesiredCapacity":      2,
+						"MinSize":              1,
+						"MaxSize":              3,
+						"Tags": []map[string]any{
+							{"Key": "rotation", "Value": "aa"},
+						},
+						"LaunchTemplate": map[string]any{"Version": "5"},
+						"Instances": []map[string]any{
+							{"LifecycleState": "InService", "HealthStatus": "Healthy", "InstanceId": "i-1234567890"},
+							{"LifecycleState": "InService", "HealthStatus": "Healthy", "InstanceId": "i-0987654321"},
+						},
+						"Activities": []map[string]any{{"Cause": "None", "StatusCode": "Successful", "Progress": 100}},
+					}},
+				}
 				if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
 					fmt.Fprintln(os.Stderr, err)
 					os.Exit(3)

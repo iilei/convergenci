@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -41,20 +42,31 @@ func TestObserveAWSResourceWithoutStrategyUsesContractStatus(t *testing.T) {
 func TestObserveAWSResourceFakeScenarios(t *testing.T) {
 	cfg := awscmd.Config{BinaryPath: fakeAWSCLIPath(t)}
 	tests := []struct {
-		name     string
-		scenario string
-		want     string
+		name              string
+		scenario          string
+		desiredGeneration []scan.GenerationRequirement
+		want              string
 	}{
 		{name: "successful refresh", scenario: "success", want: "converged"},
 		{name: "in-progress refresh", scenario: "in-progress", want: "pending"},
 		{name: "failed refresh", scenario: "failed", want: "failed"},
+		{
+			name:     "not-started rotation stays pending",
+			scenario: "not-started",
+			desiredGeneration: []scan.GenerationRequirement{
+				{Type: "tag", Key: "rotation", Value: "bb"},
+				{Type: "launch_template", Value: "6"},
+			},
+			want: "pending",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("FAKE_AWS_SCENARIO", test.scenario)
 			item := scan.ContractItem{
-				Address: "aws_autoscaling_group.example",
-				Name:    "example-asg",
+				Address:           "aws_autoscaling_group.example",
+				Name:              "example-asg",
+				DesiredGeneration: test.desiredGeneration,
 				Observation: scan.Observation{
 					Strategy: "instance_refresh",
 				},
@@ -201,6 +213,38 @@ printf '%s\n' "$FAKE_AWS_GROUP_RESPONSE"
 	}
 	if !strings.Contains(string(output), "desired_generation_met tag rotation value=green") {
 		t.Fatalf("debug output = %q, want desired_generation_met event once tag matches", output)
+	}
+}
+
+func TestPollAwaitTimesOutWhenRotationHasNotStarted(t *testing.T) {
+	t.Setenv("FAKE_AWS_SCENARIO", "not-started")
+	contract := scan.Contract{Resources: []scan.ContractItem{{
+		Address: "module.app.aws_autoscaling_group.main",
+		Name:    "app-asg",
+		Kind:    "aws_asg",
+		DesiredGeneration: []scan.GenerationRequirement{
+			{Type: "tag", Key: "rotation", Value: "bb"},
+			{Type: "launch_template", Value: "6"},
+		},
+		Observation: scan.Observation{Strategy: "instance_refresh"},
+	}}}
+
+	result, err := pollAwait(contract, 20*time.Millisecond, 5*time.Millisecond, awscmd.Config{BinaryPath: fakeAWSCLIPath(t)})
+	if err == nil {
+		t.Fatal("pollAwait returned nil error, want timeout for not-started rotation")
+	}
+	var exitErr *ExitCodeError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("pollAwait error = %T, want *ExitCodeError", err)
+	}
+	if exitErr.Code != codeTimeout {
+		t.Fatalf("exit code = %d, want %d", exitErr.Code, codeTimeout)
+	}
+	if result.Status != statusTimeout {
+		t.Fatalf("result.Status = %q, want %q", result.Status, statusTimeout)
+	}
+	if result.Pending != 1 || result.Converged != 0 {
+		t.Fatalf("result counts = pending:%d converged:%d, want pending:1 converged:0", result.Pending, result.Converged)
 	}
 }
 

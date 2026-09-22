@@ -131,6 +131,33 @@ CONVERGENCI_AWAIT_TIMEOUT=2s CONVERGENCI_AWAIT_INTERVAL=50ms FAKE_AWS_SCENARIO=n
 ./convergenci report "${out_dir}/.convergence.convergence-report.json"
 """
 
+
+[tasks.fake-aws-scenarios-not-started]
+depends = ["build", "build-fake-aws"]
+description = "Verify await times out instead of succeeding before an ASG rotation has started"
+run = """
+out_dir=".bench/not-started-asg-default-rotation"; rm -rf "$out_dir"; mkdir -p "$out_dir";
+./convergenci scan stubs/asg-default-rotation.json \
+--output-json "${out_dir}/.convergence.json" \
+--aws-cli-path "$PWD/testdata/fake-aws-bin/aws"
+
+await_log="/tmp/convergenci-await-not-started.log"
+await_exit=0
+DEBUG=true CONVERGENCI_AWAIT_TIMEOUT=200ms CONVERGENCI_AWAIT_INTERVAL=50ms FAKE_AWS_SCENARIO=not-started \
+./convergenci await "${out_dir}/.convergence.json" \
+--aws-cli-path "$PWD/testdata/fake-aws-bin/aws" >"$await_log" 2>&1 || await_exit=$?
+cat "$await_log"
+if [ "$await_exit" -eq 0 ]; then
+    echo "not-started scenario unexpectedly converged" >&2
+    exit 1
+fi
+if [ "$await_exit" -ne 230 ]; then
+    echo "expected await timeout exit code 230, got $await_exit" >&2
+    exit 1
+fi
+./convergenci report "${out_dir}/.convergence.convergence-report.json"
+"""
+
 [tasks.fake-aws-scenarios-mixed-outcomes]
 depends = ["fake-aws-scenarios-scan"]
 description = "Exercise a contract where one resource stays pending while the rest converge, then render the mixed report"
