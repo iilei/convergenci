@@ -27,7 +27,7 @@ func TestFakeAWSCallerIdentityOutput(t *testing.T) {
 }
 
 func TestSupportedScenarioNames(t *testing.T) {
-	for _, scenario := range []string{"success", "failed", "in-progress", "in-progress-then-success", "in-progress-then-failed", "complex-report"} {
+	for _, scenario := range []string{"success", "not-started", "not-started-then-success", "failed", "in-progress", "in-progress-then-success", "in-progress-then-failed", "complex-report"} {
 		if got := scenarioName(scenario); got == "" {
 			t.Fatalf("scenarioName(%q) returned empty string", scenario)
 		}
@@ -139,5 +139,51 @@ func TestTransitionalScenariosStayInProgressLongerThanSinglePoll(t *testing.T) {
 		if got := delayedOutcome(tc.scenario, tc.threshold); got != "success" {
 			t.Fatalf("third %s delayedOutcome = %q, want success", tc.scenario, got)
 		}
+	}
+}
+
+func TestNotStartedThenSuccessRefreshTransitionsDeterministically(t *testing.T) {
+	scenario := "not-started-then-success"
+	resetScenarioState(scenario)
+	defer resetScenarioState(scenario)
+
+	count := incrementScenarioCount(scenario)
+	if count != 1 {
+		t.Fatalf("first count = %d, want 1", count)
+	}
+	if got := scenarioCount(scenario); got != 1 {
+		t.Fatalf("scenarioCount() = %d, want 1", got)
+	}
+
+	count = incrementScenarioCount(scenario)
+	if count != 2 {
+		t.Fatalf("second count = %d, want 2", count)
+	}
+	if got := scenarioCount(scenario); got != 2 {
+		t.Fatalf("scenarioCount() = %d, want 2", got)
+	}
+
+	count = incrementScenarioCount(scenario)
+	if count != 3 {
+		t.Fatalf("third count = %d, want 3", count)
+	}
+	if got := scenarioCount(scenario); got != 3 {
+		t.Fatalf("scenarioCount() = %d, want 3", got)
+	}
+}
+
+func TestResetScenarioStateClearsNotStartedThenSuccessCounter(t *testing.T) {
+	scenario := "not-started-then-success"
+	resetScenarioState(scenario)
+	if got := scenarioCount(scenario); got != 0 {
+		t.Fatalf("scenarioCount() before increments = %d, want 0", got)
+	}
+	_ = incrementScenarioCount(scenario)
+	if got := scenarioCount(scenario); got != 1 {
+		t.Fatalf("scenarioCount() after increment = %d, want 1", got)
+	}
+	resetScenarioState(scenario)
+	if got := scenarioCount(scenario); got != 0 {
+		t.Fatalf("scenarioCount() after reset = %d, want 0", got)
 	}
 }

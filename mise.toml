@@ -115,6 +115,22 @@ DEBUG=true CONVERGENCI_AWAIT_TIMEOUT=1s CONVERGENCI_AWAIT_INTERVAL=50ms FAKE_AWS
 ./convergenci report "${out_dir}/.convergence.convergence-report.json"
 """
 
+[tasks.fake-aws-scenarios-not-started-then-success]
+depends = ["build", "build-fake-aws"]
+description = "Verify await started pre-rotation keeps polling until refresh starts later and succeeds"
+run = """
+out_dir=".bench/not-started-then-success"; rm -rf "$out_dir"; mkdir -p "$out_dir";
+./convergenci scan stubs/asg-default-rotation.json \
+--output-json "${out_dir}/.convergence.json" \
+--aws-cli-path "$PWD/testdata/fake-aws-bin/aws"
+
+rm -f /tmp/convergenci-fake-aws-state-not_started_then_success
+CONVERGENCI_AWAIT_TIMEOUT=2s CONVERGENCI_AWAIT_INTERVAL=50ms FAKE_AWS_SCENARIO=not-started-then-success \
+./convergenci await "${out_dir}/.convergence.json" \
+--aws-cli-path "$PWD/testdata/fake-aws-bin/aws"
+./convergenci report "${out_dir}/.convergence.convergence-report.json"
+"""
+
 [tasks.fake-aws-scenarios-mixed-outcomes]
 depends = ["fake-aws-scenarios-scan"]
 description = "Exercise a contract where one resource stays pending while the rest converge, then render the mixed report"

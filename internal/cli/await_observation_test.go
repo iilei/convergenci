@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -242,6 +243,7 @@ printf '%s\n' '{"AutoScalingGroups":[{"AutoScalingGroupARN":"arn:example","Activ
 	if err := os.WriteFile(awsPath, []byte(stub), 0o755); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
+
 	t.Setenv("FAKE_AWS_TEST_STATE", statePath)
 	SetDebug(true)
 	t.Cleanup(func() { SetDebug(false) })
@@ -284,5 +286,54 @@ printf '%s\n' '{"AutoScalingGroups":[{"AutoScalingGroupARN":"arn:example","Activ
 		!strings.Contains(debugOutput, "resources=example-asg") ||
 		!strings.Contains(debugOutput, "converged=example-asg") {
 		t.Fatalf("debug output = %q, want retry lifecycle events with resource names", output)
+	}
+}
+
+func TestPollAwaitWaitsForRotationToStartAndConverge(t *testing.T) {
+	scenario := "not-started-then-success"
+	statePath := filepath.Join(
+		os.TempDir(),
+		"convergenci-fake-aws-state-"+strings.ReplaceAll(scenario, "-", "_"),
+	)
+	_ = os.Remove(statePath)
+	t.Cleanup(func() { _ = os.Remove(statePath) })
+
+	t.Setenv("FAKE_AWS_SCENARIO", scenario)
+	contract := scan.Contract{Resources: []scan.ContractItem{{
+		Address: "module.app.aws_autoscaling_group.main",
+		Name:    "app-asg",
+		Observation: scan.Observation{
+			Strategy: "instance_refresh",
+		},
+		DesiredGeneration: []scan.GenerationRequirement{
+			{Type: "tag", Key: "rotation", Value: "bb"},
+			{Type: "launch_template", Value: "6"},
+		},
+	}}}
+
+	result, err := pollAwait(contract, 500*time.Millisecond, 10*time.Millisecond, awscmd.Config{BinaryPath: fakeAWSCLIPath(t)})
+	if err != nil {
+		t.Fatalf("pollAwait returned error: %v", err)
+	}
+	if result.Status != "converged" {
+		t.Fatalf("status = %q, want converged", result.Status)
+	}
+	if result.Pending != 0 {
+		t.Fatalf("pending = %d, want 0", result.Pending)
+	}
+	if result.Converged != 1 {
+		t.Fatalf("converged = %d, want 1", result.Converged)
+	}
+
+	data, readErr := os.ReadFile(statePath)
+	if readErr != nil {
+		t.Fatalf("ReadFile(%q) returned error: %v", statePath, readErr)
+	}
+	polls, parseErr := strconv.Atoi(strings.TrimSpace(string(data)))
+	if parseErr != nil {
+		t.Fatalf("Atoi(%q) returned error: %v", strings.TrimSpace(string(data)), parseErr)
+	}
+	if polls < 2 {
+		t.Fatalf("refresh polls = %d, want at least 2", polls)
 	}
 }

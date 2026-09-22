@@ -26,6 +26,10 @@ func scenarioName(scenario string) string {
 	switch scenario {
 	case "", "success":
 		return "success"
+	case "not-started":
+		return "not-started"
+	case "not-started-then-success":
+		return "not-started-then-success"
 	case "failed":
 		return "failed"
 	case "in-progress":
@@ -94,6 +98,50 @@ func incrementScenarioCount(scenario string) int {
 	count++
 	_ = os.WriteFile(statePath, []byte(strconv.Itoa(count)), 0o600)
 	return count
+}
+
+func scenarioCount(scenario string) int {
+	data, err := os.ReadFile(scenarioStatePath(scenario))
+	if err != nil {
+		return 0
+	}
+	count, _ := strconv.Atoi(strings.TrimSpace(string(data)))
+	return count
+}
+
+func asgResponse(asgName, rotationTag, launchTemplateVersion, activityStatus string, activityProgress int) map[string]any {
+	return map[string]any{
+		"AutoScalingGroups": []map[string]any{{
+			"AutoScalingGroupName": asgName,
+			"AutoScalingGroupARN":  fakeASGARN(asgName),
+			"DesiredCapacity":      2,
+			"MinSize":              1,
+			"MaxSize":              3,
+			"Tags": []map[string]any{
+				{"Key": "rotation", "Value": rotationTag},
+			},
+			"LaunchTemplate": map[string]any{
+				"Version": launchTemplateVersion,
+			},
+			"Instances": []map[string]any{
+				{"LifecycleState": "InService", "HealthStatus": "Healthy", "InstanceId": "i-1234567890"},
+				{"LifecycleState": "InService", "HealthStatus": "Healthy", "InstanceId": "i-0987654321"},
+			},
+			"Activities": []map[string]any{{"Cause": "None", "StatusCode": activityStatus, "Progress": activityProgress}},
+		}},
+	}
+}
+
+func refreshResponse(asgName, status string, percentage int, completedAt any) map[string]any {
+	return map[string]any{
+		"InstanceRefreshes": []map[string]any{{
+			"AutoScalingGroupName": asgName,
+			"InstanceRefreshId":    "ir-123",
+			"Status":               status,
+			"PercentageComplete":   percentage,
+			"CompletedAt":          completedAt,
+		}},
+	}
 }
 
 func progressPercent(scenario string, steps ...int) int {
@@ -297,6 +345,26 @@ func main() {
 		asgName := requestedASGName(rest)
 		switch subcommand {
 		case "describe-auto-scaling-groups":
+			if scenario == "not-started" {
+				response := asgResponse(asgName, "aa", "5", "Successful", 100)
+				if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					os.Exit(3)
+				}
+				return
+			}
+			if scenario == "not-started-then-success" {
+				tag, launchTemplateVersion := "aa", "5"
+				if scenarioCount(scenario) >= 3 {
+					tag, launchTemplateVersion = "bb", "6"
+				}
+				response := asgResponse(asgName, tag, launchTemplateVersion, "Successful", 100)
+				if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					os.Exit(3)
+				}
+				return
+			}
 			if scenario == "mixed-resource-outcomes" {
 				response := map[string]any{
 					"AutoScalingGroups": []map[string]any{{
@@ -395,6 +463,37 @@ func main() {
 			}
 			return
 		case "describe-instance-refreshes":
+			if scenario == "not-started" {
+				response := map[string]any{"InstanceRefreshes": []map[string]any{}}
+				if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					os.Exit(3)
+				}
+				return
+			}
+			if scenario == "not-started-then-success" {
+				switch count := incrementScenarioCount(scenario); {
+				case count == 1:
+					response := map[string]any{"InstanceRefreshes": []map[string]any{}}
+					if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
+						fmt.Fprintln(os.Stderr, err)
+						os.Exit(3)
+					}
+				case count == 2:
+					response := refreshResponse(asgName, "InProgress", 45, nil)
+					if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
+						fmt.Fprintln(os.Stderr, err)
+						os.Exit(3)
+					}
+				default:
+					response := refreshResponse(asgName, "Successful", 100, "2026-09-19T00:00:00Z")
+					if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
+						fmt.Fprintln(os.Stderr, err)
+						os.Exit(3)
+					}
+				}
+				return
+			}
 			if scenario == "mixed-resource-outcomes" {
 				response := map[string]any{
 					"InstanceRefreshes": []map[string]any{{

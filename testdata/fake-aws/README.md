@@ -26,6 +26,8 @@ If you still want to put the shim on `PATH`, that is optional, but it is not req
 ## Supported scenarios
 
 - `success` — nothing is in progress
+- `not-started` — always returns no instance refresh history and the pre-rotation ASG generation (`rotation=aa`, launch-template `5`)
+- `not-started-then-success` — starts pre-rotation with no refresh history, then returns an `InProgress` refresh, then returns `Successful` with the rotated generation (`rotation=bb`, launch-template `6`)
 - `failed` — a failed runtime state is reported
 - `in-progress` — returns a realistic `InProgress` payload with partial completion such as `45%`
 - `late-success` — returns `InProgress` for a short sequence of polls and then resolves to `Successful` once the delayed transition is reached
